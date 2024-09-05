@@ -1,3 +1,5 @@
+const { ethers } = require("hardhat");
+
 async function main() {
 
     const [deployer] = await ethers.getSigners();
@@ -7,10 +9,14 @@ async function main() {
         deployer.address
     );
 
-    const KalaMangWashingHappyHoursTestV5 = await ethers.getContractFactory("KalaMangWashingHappyHoursTestV5");
-    const contract = await KalaMangWashingHappyHoursTestV5.deploy("0x1BbE34CF9fd2E0669deEE34c68282ec1e6c44ab0", "0x96f4C25E4fEB02c8BCbAdb80d0088E0112F728Bc", "0x4Bf8a52cC1AE2F17F56b274adaF76B4A648eD155");
+    const KalaMangWashingStorageTestV1 = await ethers.getContractFactory("KalaMangWashingStorageTestV1");
+    const contract = await KalaMangWashingStorageTestV1.deploy(ethers.ZeroAddress, "0x99166455989a868d5151799c716B3c1Be95D5114", "0x4Bf8a52cC1AE2F17F56b274adaF76B4A648eD155", "0x1BbE34CF9fd2E0669deEE34c68282ec1e6c44ab0");
 
-    console.log("Contract deployed at:", contract.target);
+    console.log("KalaMangWashingStorageTestV1 deployed at:", contract.target);
+
+    const KalaMangWashingControllerTestV1 = await ethers.getContractFactory("KalaMangWashingControllerTestV1");
+    const contract2 = await KalaMangWashingControllerTestV1.deploy("0x96f4C25E4fEB02c8BCbAdb80d0088E0112F728Bc", contract.target);
+    console.log("KalaMangWashingControllerTestV1 deployed at:", contract2.target);
 }
 
 main()
