@@ -13,6 +13,7 @@ interface IKalaMangWashingStorage {
         mapping(address => bool) hasClaimed;
         bool isRequireWhitelist;
         mapping(address => bool) whitelist;
+        address[] whitelistArray;
         uint256[] remainingAmounts;
         bool isactive;
     }
@@ -65,13 +66,10 @@ interface IKalaMangWashingStorage {
         string calldata _kalamangId
     ) external view returns (uint256);
 
-    function addKalamangWhiteList(
+    function updateWhitelist(
         string calldata _kalamangId,
-        address[] calldata _whitelist
-    ) external;
-
-    function removeKalamangWhiteList(
-        string calldata _kalamangId,
-        address[] calldata _whitelist
+        bool _isRequireWhitelist,
+        address[] calldata _whitelist,
+        address _creator
     ) external;
 }

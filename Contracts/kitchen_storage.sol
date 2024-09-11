@@ -83,6 +83,7 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         newKalamang.remainingAmounts = _config.remainingAmounts;
         newKalamang.acceptedKYCLevel = _config.acceptedKYCLevel;
         newKalamang.isRequireWhitelist = _config.isRequireWhitelist;
+        newKalamang.whitelistArray = _config.whitelist;
         for (uint i = 0; i < _config.whitelist.length; i++) {
             newKalamang.whitelist[_config.whitelist[i]] = true;
         }
@@ -123,7 +124,7 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         require(kalamang.isactive, "Kalamang is not active");
         require(!kalamang.hasClaimed[_recipient], "Already claimed");
         require(
-            kalamang.whitelist[_recipient] || !kalamang.isRequireWhitelist,
+            !kalamang.isRequireWhitelist || kalamang.whitelist[_recipient],
             "Address is not in whitelist"
         );
         require(
@@ -135,10 +136,6 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
                 kycBitkubChain.kycsLevel(_recipient) >=
                 kalamang.acceptedKYCLevel,
             "KYC level is not accepted"
-        );
-        require(
-            !kalamang.isRequireWhitelist || kalamang.whitelist[_recipient],
-            "Address is not in whitelist"
         );
 
         uint256 amount = kalamang.remainingAmounts[_claimIndex];
@@ -291,27 +288,27 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         return kalamang.maxRecipients - kalamang.claimedRecipients;
     }
 
-    function addKalamangWhiteList(
+    function updateWhitelist(
         string calldata _kalamangId,
-        address[] calldata _whitelist
+        bool _isRequireWhitelist,
+        address[] calldata _whitelist,
+        address _creator
     ) external override onlyKalaMangController {
         KalaMang storage kalamang = kalamangs[_kalamangId];
         require(kalamang.creator != address(0), "Kalamang does not exist");
+        require(kalamang.creator == _creator, "Invalid creator");
+        require(kalamang.isactive, "Kalamang is not active");
+
+        kalamang.isRequireWhitelist = _isRequireWhitelist;
+
+        for (uint i = 0; i < kalamang.whitelistArray.length; i++) {
+            kalamang.whitelist[kalamang.whitelistArray[i]] = false;
+        }
+
+        kalamang.whitelistArray = _whitelist;
 
         for (uint i = 0; i < _whitelist.length; i++) {
             kalamang.whitelist[_whitelist[i]] = true;
-        }
-    }
-
-    function removeKalamangWhiteList(
-        string calldata _kalamangId,
-        address[] calldata _whitelist
-    ) external override onlyKalaMangController {
-        KalaMang storage kalamang = kalamangs[_kalamangId];
-        require(kalamang.creator != address(0), "Kalamang does not exist");
-
-        for (uint i = 0; i < _whitelist.length; i++) {
-            kalamang.whitelist[_whitelist[i]] = false;
         }
     }
 

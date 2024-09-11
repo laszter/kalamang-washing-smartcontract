@@ -148,7 +148,7 @@ contract KalaMangWashingControllerTestV1 {
         bool _isRandom,
         bool _isRequireWhitelist,
         uint256 _acceptedKYCLevel,
-        address[] calldata _whitelist,
+        bytes memory _whitelist,
         address _bitkubNext
     ) external onlySdkCallHelperRouter whenNotPaused {
         require(_totalTokens > 0, "Total tokens must be greater than zero");
@@ -186,6 +186,9 @@ contract KalaMangWashingControllerTestV1 {
 
         remainingAmounts[_maxRecipients - 1] = remainingTokens;
 
+        address[] memory _whitelistArr;
+        (_whitelistArr) = abi.decode(_whitelist, (address[]));
+
         IKalaMangWashingStorage.KalaMangConfig
             memory kalamangConfig = IKalaMangWashingStorage.KalaMangConfig(
                 kalamangId,
@@ -196,7 +199,7 @@ contract KalaMangWashingControllerTestV1 {
                 _acceptedKYCLevel,
                 _isRequireWhitelist,
                 remainingAmounts,
-                _whitelist,
+                _whitelistArr,
                 true
             );
 
@@ -243,6 +246,36 @@ contract KalaMangWashingControllerTestV1 {
         );
 
         emit TokenClaimed(_kalamangId, _bitkubNext, amount);
+    }
+
+    function updateWhitelist(
+        string calldata _kalamangId,
+        bool _isRequireWhitelist,
+        address[] calldata _whitelist
+    ) external {
+        kalaMangWashingStorage.updateWhitelist(
+            _kalamangId,
+            _isRequireWhitelist,
+            _whitelist,
+            msg.sender
+        );
+    }
+
+    function updateWhitelistBySdk(
+        string calldata _kalamangId,
+        bool _isRequireWhitelist,
+        bytes memory _whitelist,
+        address _bitkubNext
+    ) external onlySdkCallHelperRouter {
+        address[] memory _whitelistArr;
+        (_whitelistArr) = abi.decode(_whitelist, (address[]));
+
+        kalaMangWashingStorage.updateWhitelist(
+            _kalamangId,
+            _isRequireWhitelist,
+            _whitelistArr,
+            _bitkubNext
+        );
     }
 
     function abortKalamang(string calldata _kalamangId) external {
