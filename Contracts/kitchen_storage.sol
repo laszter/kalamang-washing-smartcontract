@@ -64,14 +64,7 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
     function createKalamang(
         KalaMangConfig calldata _config
     ) external override onlyKalaMangController {
-        require(_config.creator != address(0), "Creator address is required");
         require(!kalamangsExists[_config.kalamangId], "Kalamang exists");
-        require(_config.totalTokens > 0, "Total tokens is required");
-        require(_config.maxRecipients > 0, "Max recipients is required");
-        require(
-            _config.remainingAmounts.length > 0,
-            "Remaining amounts is required"
-        );
 
         KalaMang storage newKalamang = kalamangs[_config.kalamangId];
         newKalamang.creator = _config.creator;
@@ -132,9 +125,7 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
             "Invalid claim index"
         );
         require(
-            kycBitkubChain.isAddressKyc(_recipient) &&
-                kycBitkubChain.kycsLevel(_recipient) >=
-                kalamang.acceptedKYCLevel,
+            kycBitkubChain.kycsLevel(_recipient) >= kalamang.acceptedKYCLevel,
             "KYC level is not accepted"
         );
 
@@ -222,6 +213,9 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         info.totalTokens = kalamang.totalTokens;
         info.claimedRecipients = kalamang.claimedRecipients;
         info.isactive = kalamang.isactive;
+        info.isRandom = kalamang.isRandom;
+        info.isRequireWhitelist = kalamang.isRequireWhitelist;
+        info.acceptedKYCLevel = kalamang.acceptedKYCLevel;
         info.remainingAmounts = 0;
 
         for (uint256 i = 0; i < kalamang.remainingAmounts.length; i++) {
@@ -262,6 +256,14 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         return myKalamangIds;
     }
 
+    function isInWhitelist(
+        string calldata kalamangId,
+        address _target
+    ) public view virtual returns (bool) {
+        KalaMang storage kalamang = kalamangs[kalamangId];
+        return kalamang.creator != address(0) && kalamang.whitelist[_target];
+    }
+
     function isClaimed(
         string calldata kalamangId,
         address _target
@@ -295,7 +297,6 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         address _creator
     ) external override onlyKalaMangController {
         KalaMang storage kalamang = kalamangs[_kalamangId];
-        require(kalamang.creator != address(0), "Kalamang does not exist");
         require(kalamang.creator == _creator, "Invalid creator");
         require(kalamang.isactive, "Kalamang is not active");
 
