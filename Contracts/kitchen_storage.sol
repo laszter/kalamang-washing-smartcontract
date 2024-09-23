@@ -69,11 +69,11 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         KalaMang storage newKalamang = kalamangs[_config.kalamangId];
         newKalamang.creator = _config.creator;
         newKalamang.totalTokens = _config.totalTokens;
+        newKalamang.claimedTokens = 0;
         newKalamang.maxRecipients = _config.maxRecipients;
         newKalamang.claimedRecipients = 0;
         newKalamang.isactive = true;
         newKalamang.isRandom = _config.isRandom;
-        newKalamang.remainingAmounts = _config.remainingAmounts;
         newKalamang.acceptedKYCLevel = _config.acceptedKYCLevel;
         newKalamang.isRequireWhitelist = _config.isRequireWhitelist;
         newKalamang.whitelistArray = _config.whitelist;
@@ -109,7 +109,7 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
 
     function claimToken(
         string calldata _kalamangId,
-        uint256 _claimIndex,
+        uint256 _claimTokens,
         address _recipient
     ) external override onlyKalaMangController returns (uint256) {
         KalaMang storage kalamang = kalamangs[_kalamangId];
@@ -121,37 +121,24 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
             "Address is not in whitelist"
         );
         require(
-            _claimIndex < kalamang.remainingAmounts.length,
-            "Invalid claim index"
-        );
-        require(
             kycBitkubChain.kycsLevel(_recipient) >= kalamang.acceptedKYCLevel,
             "KYC level is not accepted"
         );
 
-        uint256 amount = kalamang.remainingAmounts[_claimIndex];
-
         kalamang.hasClaimed[_recipient] = true;
         kalamang.claimedRecipients++;
-
-        uint256 lastIndex = kalamang.remainingAmounts.length - 1;
-        if (_claimIndex != lastIndex) {
-            kalamang.remainingAmounts[_claimIndex] = kalamang.remainingAmounts[
-                lastIndex
-            ];
-        }
-        kalamang.remainingAmounts.pop();
+        kalamang.claimedTokens += _claimTokens;
 
         claimedHistory[_kalamangId].push(
             KalaMangClaimedHistory({
                 claimedAddress: _recipient,
-                claimedAmount: amount
+                claimedAmount: _claimTokens
             })
         );
 
-        require(token.transfer(_recipient, amount), "Transfer failed");
+        require(token.transfer(_recipient, _claimTokens), "Transfer failed");
 
-        return amount;
+        return _claimTokens;
     }
 
     function abortKalamang(
@@ -163,10 +150,7 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         require(kalamang.creator == _creator, "Invalid creator");
         require(kalamang.isactive == true, "Already aborted");
 
-        uint256 amount = 0;
-        for (uint256 i = 0; i < kalamang.remainingAmounts.length; i++) {
-            amount += kalamang.remainingAmounts[i];
-        }
+        uint256 amount = kalamang.totalTokens - kalamang.claimedTokens;
 
         require(
             token.transfer(kalamang.creator, amount),
@@ -186,10 +170,7 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
                 continue;
             }
 
-            uint256 amount = 0;
-            for (uint256 j = 0; j < kalamang.remainingAmounts.length; j++) {
-                amount += kalamang.remainingAmounts[j];
-            }
+            uint256 amount = kalamang.totalTokens - kalamang.claimedTokens;
 
             require(
                 token.transfer(kalamang.creator, amount),
@@ -216,11 +197,7 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         info.isRandom = kalamang.isRandom;
         info.isRequireWhitelist = kalamang.isRequireWhitelist;
         info.acceptedKYCLevel = kalamang.acceptedKYCLevel;
-        info.remainingAmounts = 0;
-
-        for (uint256 i = 0; i < kalamang.remainingAmounts.length; i++) {
-            info.remainingAmounts += kalamang.remainingAmounts[i];
-        }
+        info.remainingAmounts = kalamang.totalTokens - kalamang.claimedTokens;
 
         return info;
     }

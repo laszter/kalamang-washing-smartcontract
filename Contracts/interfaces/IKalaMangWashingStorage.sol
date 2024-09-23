@@ -6,6 +6,7 @@ interface IKalaMangWashingStorage {
     struct KalaMang {
         address creator;
         uint256 totalTokens;
+        uint256 claimedTokens;
         uint256 maxRecipients;
         uint256 claimedRecipients;
         bool isRandom;
@@ -14,7 +15,6 @@ interface IKalaMangWashingStorage {
         bool isRequireWhitelist;
         mapping(address => bool) whitelist;
         address[] whitelistArray;
-        uint256[] remainingAmounts;
         bool isactive;
     }
 
