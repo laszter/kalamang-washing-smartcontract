@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 contract Calculator {
     address public owner;
@@ -18,7 +18,10 @@ contract Calculator {
     }
 
     modifier onlySdkCallHelperRouter() {
-        require(msg.sender == sdkCallHelperRouter, "Only sdkCallHelperRouter can call this function");
+        require(
+            msg.sender == sdkCallHelperRouter,
+            "Only sdkCallHelperRouter can call this function"
+        );
         _;
     }
 
@@ -28,7 +31,9 @@ contract Calculator {
         owner = _owner;
     }
 
-    function setSdkCallHelperRouter(address _sdkCallHelperRouter) public onlyOwner {
+    function setSdkCallHelperRouter(
+        address _sdkCallHelperRouter
+    ) public onlyOwner {
         sdkCallHelperRouter = _sdkCallHelperRouter;
     }
 
@@ -57,20 +62,30 @@ contract Calculator {
         return privateValue[msg.sender];
     }
 
-    function addPrivateValueBySdk(uint256 _value, address _bitkubNext) external onlySdkCallHelperRouter {
+    function addPrivateValueBySdk(
+        uint256 _value,
+        address _bitkubNext
+    ) external onlySdkCallHelperRouter {
         privateValue[_bitkubNext] += _value;
         emit AddPrivateValue(_bitkubNext, _value);
     }
 
-    function subPrivateValueBySdk(uint256 _value, address _bitkubNext) external onlySdkCallHelperRouter {
+    function subPrivateValueBySdk(
+        uint256 _value,
+        address _bitkubNext
+    ) external onlySdkCallHelperRouter {
         privateValue[_bitkubNext] -= _value;
     }
 
-    function getMyValueBySdk(address _bitkubNext) external onlySdkCallHelperRouter view returns (uint256) {
+    function getMyValueBySdk(
+        address _bitkubNext
+    ) external view onlySdkCallHelperRouter returns (uint256) {
         return privateValue[_bitkubNext];
     }
 
-    function getTargetValue(address _bitkubNext) external view returns (uint256) {
+    function getTargetValue(
+        address _bitkubNext
+    ) external view returns (uint256) {
         return privateValue[_bitkubNext];
     }
 }

@@ -44,7 +44,6 @@ interface IKalaMangWashingStorage {
         bool isRandom;
         uint256 acceptedKYCLevel;
         bool isRequireWhitelist;
-        uint256[] remainingAmounts;
         address[] whitelist;
         bool isSdkCallerHelper;
     }
@@ -53,7 +52,7 @@ interface IKalaMangWashingStorage {
 
     function claimToken(
         string calldata _kalamangId,
-        uint256 _claimIndex,
+        uint256 _claimTokens,
         address _recipient
     ) external returns (uint256);
 
@@ -62,9 +61,9 @@ interface IKalaMangWashingStorage {
         address _creator
     ) external returns (uint256);
 
-    function getKalamangRemainingRecipients(
+    function getKalamangInfo(
         string calldata _kalamangId
-    ) external view returns (uint256);
+    ) external view returns (KalaMangInfo memory);
 
     function updateWhitelist(
         string calldata _kalamangId,

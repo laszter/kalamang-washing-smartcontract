@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 import "./interfaces/IKalaMangWashingStorage.sol";
 
@@ -63,7 +63,7 @@ contract KalaMangWashingControllerTestV1 {
                     keccak256(
                         abi.encodePacked(
                             block.timestamp,
-                            block.difficulty,
+                            block.number,
                             msg.sender,
                             i
                         )
@@ -73,6 +73,75 @@ contract KalaMangWashingControllerTestV1 {
         }
 
         return string(randomString);
+    }
+
+    function getAmountToClaim(
+        string calldata _kalamangId,
+        address _recipient
+    ) private view returns (uint256) {
+        IKalaMangWashingStorage.KalaMangInfo
+            memory kalamangInfo = kalaMangWashingStorage.getKalamangInfo(
+                _kalamangId
+            );
+
+        uint256 claimAmount = 0;
+
+        if (!kalamangInfo.isactive) {
+            return claimAmount;
+        }
+
+        if (kalamangInfo.claimedRecipients + 1 == kalamangInfo.maxRecipients) {
+            claimAmount = kalamangInfo.remainingAmounts;
+        } else if (kalamangInfo.isRandom) {
+            // Distribute random amounts
+
+            uint256 randomSetSize = 10;
+            uint256[] memory randomSets = new uint256[](randomSetSize);
+
+            for (uint256 j = 0; j < randomSetSize; j++) {
+                randomSets[j] =
+                    ((kalamangInfo.remainingAmounts / (randomSetSize - j)) *
+                        (uint256(
+                            keccak256(
+                                abi.encodePacked(
+                                    block.timestamp,
+                                    _recipient,
+                                    _kalamangId,
+                                    j
+                                )
+                            )
+                        ) % 100)) /
+                    100;
+            }
+
+            uint256 randomAmount = randomSets[
+                (uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            block.timestamp,
+                            _recipient,
+                            _kalamangId,
+                            block.number
+                        )
+                    )
+                ) % randomSetSize)
+            ];
+
+            if (randomAmount > kalamangInfo.remainingAmounts) {
+                randomAmount = kalamangInfo.remainingAmounts;
+            }
+
+            claimAmount = randomAmount;
+        } else {
+            // Distribute equal amounts
+            claimAmount = kalamangInfo.totalTokens / kalamangInfo.maxRecipients;
+
+            if (claimAmount > kalamangInfo.remainingAmounts) {
+                claimAmount = kalamangInfo.remainingAmounts;
+            }
+        }
+
+        return claimAmount;
     }
 
     function createKalamang(
@@ -88,36 +157,6 @@ contract KalaMangWashingControllerTestV1 {
 
         string memory kalamangId = generateRandomString(64);
 
-        uint256[] memory remainingAmounts = new uint256[](_maxRecipients);
-        uint256 remainingTokens = _totalTokens;
-
-        if (_isRandom) {
-            // Distribute random amounts
-            for (uint256 i = 0; i < _maxRecipients - 1; i++) {
-                uint256 randomAmount = ((remainingTokens /
-                    (_maxRecipients - i)) *
-                    (uint256(
-                        keccak256(
-                            abi.encodePacked(block.timestamp, msg.sender, i)
-                        )
-                    ) % 100)) / 100;
-                if (randomAmount > remainingTokens) {
-                    randomAmount = remainingTokens;
-                }
-
-                remainingAmounts[i] = randomAmount;
-                remainingTokens -= randomAmount;
-            }
-        } else {
-            // Distribute equal amounts
-            for (uint256 i = 0; i < _maxRecipients - 1; i++) {
-                remainingAmounts[i] = _totalTokens / _maxRecipients;
-                remainingTokens -= _totalTokens / _maxRecipients;
-            }
-        }
-
-        remainingAmounts[_maxRecipients - 1] = remainingTokens;
-
         IKalaMangWashingStorage.KalaMangConfig
             memory kalamangConfig = IKalaMangWashingStorage.KalaMangConfig(
                 kalamangId,
@@ -127,7 +166,6 @@ contract KalaMangWashingControllerTestV1 {
                 _isRandom,
                 _acceptedKYCLevel,
                 _isRequireWhitelist,
-                remainingAmounts,
                 _whitelist,
                 false
             );
@@ -156,36 +194,6 @@ contract KalaMangWashingControllerTestV1 {
 
         string memory kalamangId = generateRandomString(64);
 
-        uint256[] memory remainingAmounts = new uint256[](_maxRecipients);
-        uint256 remainingTokens = _totalTokens;
-
-        if (_isRandom) {
-            // Distribute random amounts
-            for (uint256 i = 0; i < _maxRecipients - 1; i++) {
-                uint256 randomAmount = ((remainingTokens /
-                    (_maxRecipients - i)) *
-                    (uint256(
-                        keccak256(
-                            abi.encodePacked(block.timestamp, msg.sender, i)
-                        )
-                    ) % 100)) / 100;
-                if (randomAmount > remainingTokens) {
-                    randomAmount = remainingTokens;
-                }
-
-                remainingAmounts[i] = randomAmount;
-                remainingTokens -= randomAmount;
-            }
-        } else {
-            // Distribute equal amounts
-            for (uint256 i = 0; i < _maxRecipients - 1; i++) {
-                remainingAmounts[i] = _totalTokens / _maxRecipients;
-                remainingTokens -= _totalTokens / _maxRecipients;
-            }
-        }
-
-        remainingAmounts[_maxRecipients - 1] = remainingTokens;
-
         address[] memory _whitelistArr;
         (_whitelistArr) = abi.decode(_whitelist, (address[]));
 
@@ -198,7 +206,6 @@ contract KalaMangWashingControllerTestV1 {
                 _isRandom,
                 _acceptedKYCLevel,
                 _isRequireWhitelist,
-                remainingAmounts,
                 _whitelistArr,
                 true
             );
@@ -214,15 +221,11 @@ contract KalaMangWashingControllerTestV1 {
     }
 
     function claimToken(string calldata _kalamangId) external {
-        uint256 randomIndex = uint256(
-            keccak256(
-                abi.encodePacked(block.timestamp, msg.sender, _kalamangId)
-            )
-        ) % kalaMangWashingStorage.getKalamangRemainingRecipients(_kalamangId);
+        uint256 claimAmount = getAmountToClaim(_kalamangId, msg.sender);
 
         uint256 amount = kalaMangWashingStorage.claimToken(
             _kalamangId,
-            randomIndex,
+            claimAmount,
             msg.sender
         );
 
@@ -233,15 +236,11 @@ contract KalaMangWashingControllerTestV1 {
         string calldata _kalamangId,
         address _bitkubNext
     ) external onlySdkCallHelperRouter {
-        uint256 randomIndex = uint256(
-            keccak256(
-                abi.encodePacked(block.timestamp, _bitkubNext, _kalamangId)
-            )
-        ) % kalaMangWashingStorage.getKalamangRemainingRecipients(_kalamangId);
+        uint256 claimAmount = getAmountToClaim(_kalamangId, _bitkubNext);
 
         uint256 amount = kalaMangWashingStorage.claimToken(
             _kalamangId,
-            randomIndex,
+            claimAmount,
             _bitkubNext
         );
 
@@ -305,5 +304,13 @@ contract KalaMangWashingControllerTestV1 {
         address _sdkCallHelperRouter
     ) external onlyOwner {
         sdkCallHelperRouter = _sdkCallHelperRouter;
+    }
+
+    function setKalaMangWashingStorage(
+        address _kalaMangWashingStorage
+    ) external onlyOwner {
+        kalaMangWashingStorage = IKalaMangWashingStorage(
+            _kalaMangWashingStorage
+        );
     }
 }

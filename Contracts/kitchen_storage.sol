@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
 import "./interfaces/IKAP20.sol";
 import "./interfaces/IKYCBitkubChain.sol";
@@ -124,6 +124,10 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
             kycBitkubChain.kycsLevel(_recipient) >= kalamang.acceptedKYCLevel,
             "KYC level is not accepted"
         );
+        require(
+            kalamang.claimedRecipients < kalamang.maxRecipients,
+            "All tokens have been claimed"
+        );
 
         kalamang.hasClaimed[_recipient] = true;
         kalamang.claimedRecipients++;
@@ -183,7 +187,7 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
 
     function getKalamangInfo(
         string calldata kalamangId
-    ) public view virtual returns (KalaMangInfo memory) {
+    ) public view virtual override returns (KalaMangInfo memory) {
         KalaMang storage kalamang = kalamangs[kalamangId];
         require(kalamang.creator != address(0), "Kalamang does not exist");
 
@@ -207,7 +211,7 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         uint256 _page,
         uint256 _pageLength
     ) public view virtual returns (string[] memory) {
-        uint256[] storage kalamangIdIndexes = kalamangsOwner[
+        uint256[] memory kalamangIdIndexes = kalamangsOwner[
             _kalamangOwnerAddress
         ];
         uint256 length = kalamangIdIndexes.length;
@@ -224,10 +228,9 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         string[] memory myKalamangIds = new string[](resultLength);
         uint256 index = 0;
 
-        for (uint256 i = start - 1; i >= end; i--) {
-            myKalamangIds[index] = kalamangIds[kalamangIdIndexes[i]];
+        for (uint256 i = start; i > end; i--) {
+            myKalamangIds[index] = kalamangIds[kalamangIdIndexes[i - 1]]; // Access element before decrementing
             index++;
-            if (i == 0) break; // Break the loop when `i` reaches 0 to avoid underflow
         }
 
         return myKalamangIds;
@@ -256,15 +259,6 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         require(kalamang.creator != address(0), "Kalamang does not exist");
 
         return claimedHistory[_kalamangId];
-    }
-
-    function getKalamangRemainingRecipients(
-        string calldata _kalamangId
-    ) public view virtual override returns (uint256) {
-        KalaMang storage kalamang = kalamangs[_kalamangId];
-        require(kalamang.creator != address(0), "Kalamang does not exist");
-
-        return kalamang.maxRecipients - kalamang.claimedRecipients;
     }
 
     function updateWhitelist(
