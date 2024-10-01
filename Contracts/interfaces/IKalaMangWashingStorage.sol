@@ -10,6 +10,8 @@ interface IKalaMangWashingStorage {
         uint256 maxRecipients;
         uint256 claimedRecipients;
         bool isRandom;
+        uint256 minRandom;
+        uint256 maxRandom;
         uint256 acceptedKYCLevel;
         mapping(address => bool) hasClaimed;
         bool isRequireWhitelist;
@@ -24,6 +26,8 @@ interface IKalaMangWashingStorage {
         uint256 maxRecipients;
         uint256 claimedRecipients;
         bool isRandom;
+        uint256 minRandom;
+        uint256 maxRandom;
         bool isRequireWhitelist;
         uint256 acceptedKYCLevel;
         uint256 totalTokens;
@@ -42,6 +46,8 @@ interface IKalaMangWashingStorage {
         uint256 totalTokens;
         uint256 maxRecipients;
         bool isRandom;
+        uint256 minRandom;
+        uint256 maxRandom;
         uint256 acceptedKYCLevel;
         bool isRequireWhitelist;
         address[] whitelist;

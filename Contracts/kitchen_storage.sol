@@ -6,7 +6,7 @@ import "./interfaces/IKYCBitkubChain.sol";
 import "./interfaces/ISdkTransferRouter.sol";
 import "./interfaces/IKalaMangWashingStorage.sol";
 
-contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
+contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can call this function");
         _;
@@ -74,6 +74,8 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         newKalamang.claimedRecipients = 0;
         newKalamang.isactive = true;
         newKalamang.isRandom = _config.isRandom;
+        newKalamang.minRandom = _config.minRandom;
+        newKalamang.maxRandom = _config.maxRandom;
         newKalamang.acceptedKYCLevel = _config.acceptedKYCLevel;
         newKalamang.isRequireWhitelist = _config.isRequireWhitelist;
         newKalamang.whitelistArray = _config.whitelist;
@@ -199,6 +201,8 @@ contract KalaMangWashingStorageTestV1 is IKalaMangWashingStorage {
         info.claimedRecipients = kalamang.claimedRecipients;
         info.isactive = kalamang.isactive;
         info.isRandom = kalamang.isRandom;
+        info.minRandom = kalamang.minRandom;
+        info.maxRandom = kalamang.maxRandom;
         info.isRequireWhitelist = kalamang.isRequireWhitelist;
         info.acceptedKYCLevel = kalamang.acceptedKYCLevel;
         info.remainingAmounts = kalamang.totalTokens - kalamang.claimedTokens;

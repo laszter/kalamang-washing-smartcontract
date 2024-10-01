@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "./interfaces/IKalaMangWashingStorage.sol";
 
-contract KalaMangWashingControllerTestV1 {
+contract KalaMangWashingControllerTestV2 {
     address public owner;
     address public sdkCallHelperRouter;
     IKalaMangWashingStorage public kalaMangWashingStorage;
@@ -99,18 +99,25 @@ contract KalaMangWashingControllerTestV1 {
             uint256[] memory randomSets = new uint256[](randomSetSize);
 
             for (uint256 j = 0; j < randomSetSize; j++) {
+                uint256 randomFactor = uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            block.timestamp,
+                            _recipient,
+                            _kalamangId,
+                            j
+                        )
+                    )
+                );
+
+                uint256 randomValueInRange = (randomFactor %
+                    (kalamangInfo.maxRandom - kalamangInfo.minRandom + 1)) +
+                    kalamangInfo.minRandom;
+
                 randomSets[j] =
-                    ((kalamangInfo.remainingAmounts / (randomSetSize - j)) *
-                        (uint256(
-                            keccak256(
-                                abi.encodePacked(
-                                    block.timestamp,
-                                    _recipient,
-                                    _kalamangId,
-                                    j
-                                )
-                            )
-                        ) % 100)) /
+                    ((kalamangInfo.remainingAmounts * randomValueInRange) /
+                        ((kalamangInfo.maxRecipients -
+                            kalamangInfo.claimedRecipients) / 2)) /
                     100;
             }
 
@@ -148,6 +155,8 @@ contract KalaMangWashingControllerTestV1 {
         uint256 _totalTokens,
         uint256 _maxRecipients,
         bool _isRandom,
+        uint256 _minRandom,
+        uint256 _maxRandom,
         bool _isRequireWhitelist,
         uint256 _acceptedKYCLevel,
         address[] calldata _whitelist
@@ -164,6 +173,8 @@ contract KalaMangWashingControllerTestV1 {
                 _totalTokens,
                 _maxRecipients,
                 _isRandom,
+                _minRandom,
+                _maxRandom,
                 _acceptedKYCLevel,
                 _isRequireWhitelist,
                 _whitelist,
@@ -184,6 +195,8 @@ contract KalaMangWashingControllerTestV1 {
         uint256 _totalTokens,
         uint256 _maxRecipients,
         bool _isRandom,
+        uint256 _minRandom,
+        uint256 _maxRandom,
         bool _isRequireWhitelist,
         uint256 _acceptedKYCLevel,
         bytes memory _whitelist,
@@ -204,6 +217,8 @@ contract KalaMangWashingControllerTestV1 {
                 _totalTokens,
                 _maxRecipients,
                 _isRandom,
+                _minRandom,
+                _maxRandom,
                 _acceptedKYCLevel,
                 _isRequireWhitelist,
                 _whitelistArr,

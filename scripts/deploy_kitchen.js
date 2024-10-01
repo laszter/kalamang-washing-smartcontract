@@ -14,14 +14,20 @@ async function main() {
     const kkubAddress = '0x1BbE34CF9fd2E0669deEE34c68282ec1e6c44ab0';
     const sdkCallHelperRouterAddress = '0x96f4C25E4fEB02c8BCbAdb80d0088E0112F728Bc';
 
-    const KalaMangWashingStorageTestV1 = await ethers.getContractFactory("KalaMangWashingStorageTestV1");
-    const contract = await KalaMangWashingStorageTestV1.deploy(ethers.ZeroAddress, kycBitkubChainAddress, sdkTransferRouterAddress, kkubAddress);
+    const KalaMangWashingStorageTestV2 = await ethers.getContractFactory("KalaMangWashingStorageTestV2");
+    const storageContract = await KalaMangWashingStorageTestV2.deploy(ethers.ZeroAddress, kycBitkubChainAddress, sdkTransferRouterAddress, kkubAddress);
+    console.log("KalaMangWashingStorageTestV2 deployed at:", storageContract.target);
 
-    console.log("KalaMangWashingStorageTestV1 deployed at:", contract.target);
+    const KalaMangWashingControllerTestV2 = await ethers.getContractFactory("KalaMangWashingControllerTestV2");
+    const controllerContract = await KalaMangWashingControllerTestV2.deploy(sdkCallHelperRouterAddress, storageContract.target);
+    console.log("KalaMangWashingControllerTestV2 deployed at:", controllerContract.target);
 
-    const KalaMangWashingControllerTestV1 = await ethers.getContractFactory("KalaMangWashingControllerTestV1");
-    const contract2 = await KalaMangWashingControllerTestV1.deploy(sdkCallHelperRouterAddress, contract.target);
-    console.log("KalaMangWashingControllerTestV1 deployed at:", contract2.target);
+    // const storageContract = await KalaMangWashingStorageTestV2.attach("0x4Efc6B7361E8d5a554E1B78C3E2dbC2EeeefFc54");
+
+    // Call setKalaMangController in KalaMangWashingStorageTestV2 to set the address of KalaMangWashingControllerTestV2
+    // const tx = await storageContract.setKalaMangController("0xe32Bdd90a56539114f543e9f3B4124F9d3eD8a1C");
+    // await tx.wait();
+    // console.log("KalaMangWashingControllerTestV2 address set in KalaMangWashingStorageTestV2");
 }
 
 main()
