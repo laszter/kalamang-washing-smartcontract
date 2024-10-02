@@ -1,3 +1,5 @@
+const { ethers } = require("hardhat");
+
 async function main() {
 
     const [deployer] = await ethers.getSigners();
@@ -11,6 +13,10 @@ async function main() {
     const contract = await Calculator.deploy();
 
     console.log("Contract deployed at:", contract.target);
+
+    await contract.waitForDeployment();
+
+    console.log(await contract.randomNormal(100, 1000));
 }
 
 main()

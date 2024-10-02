@@ -22,12 +22,13 @@ async function main() {
     const controllerContract = await KalaMangWashingControllerTestV2.deploy(sdkCallHelperRouterAddress, storageContract.target);
     console.log("KalaMangWashingControllerTestV2 deployed at:", controllerContract.target);
 
-    // const storageContract = await KalaMangWashingStorageTestV2.attach("0x4Efc6B7361E8d5a554E1B78C3E2dbC2EeeefFc54");
+    await storageContract.waitForDeployment();
+    await controllerContract.waitForDeployment();
 
     // Call setKalaMangController in KalaMangWashingStorageTestV2 to set the address of KalaMangWashingControllerTestV2
-    // const tx = await storageContract.setKalaMangController("0xe32Bdd90a56539114f543e9f3B4124F9d3eD8a1C");
-    // await tx.wait();
-    // console.log("KalaMangWashingControllerTestV2 address set in KalaMangWashingStorageTestV2");
+    const tx = await storageContract.setKalaMangController(controllerContract.target);
+    await tx.wait();
+    console.log("KalaMangWashingControllerTestV2 address set in KalaMangWashingStorageTestV2");
 }
 
 main()
