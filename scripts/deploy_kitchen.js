@@ -10,7 +10,7 @@ async function main() {
     );
 
     const kycBitkubChainAddress = '0x99166455989a868d5151799c716B3c1Be95D5114';
-    const sdkTransferRouterAddress = '0x4Bf8a52cC1AE2F17F56b274adaF76B4A648eD155';
+    const sdkTransferRouterAddress = '0xAE7D33f10f09669A86e45BAA6342377aFf4cF728';
     const kkubAddress = '0x1BbE34CF9fd2E0669deEE34c68282ec1e6c44ab0';
     const sdkCallHelperRouterAddress = '0x96f4C25E4fEB02c8BCbAdb80d0088E0112F728Bc';
 
