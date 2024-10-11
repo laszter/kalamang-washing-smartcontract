@@ -77,4 +77,16 @@ interface IKalaMangWashingStorage {
         address[] calldata _whitelist,
         address _creator
     ) external;
+
+    function addWhitelist(
+        string calldata _kalamangId,
+        address[] calldata _whitelist,
+        address _creator
+    ) external;
+
+    function removeWhitelist(
+        string calldata _kalamangId,
+        address[] calldata _whitelist,
+        address _creator
+    ) external;
 }

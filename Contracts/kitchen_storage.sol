@@ -299,6 +299,53 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         }
     }
 
+    function addWhitelist(
+        string calldata _kalamangId,
+        address[] calldata _whitelist,
+        address _creator
+    ) external override onlyKalaMangController {
+        KalaMang storage kalamang = kalamangs[_kalamangId];
+        require(kalamang.creator == _creator, "Invalid creator");
+        require(kalamang.isactive, "Kalamang is not active");
+
+        for (uint i = 0; i < _whitelist.length; i++) {
+            if (kalamang.whitelist[_whitelist[i]]) {
+                continue;
+            }
+
+            kalamang.whitelist[_whitelist[i]] = true;
+            kalamang.whitelistArray.push(_whitelist[i]);
+        }
+    }
+
+    function removeWhitelist(
+        string calldata _kalamangId,
+        address[] calldata _whitelist,
+        address _creator
+    ) external override onlyKalaMangController {
+        KalaMang storage kalamang = kalamangs[_kalamangId];
+        require(kalamang.creator == _creator, "Invalid creator");
+        require(kalamang.isactive, "Kalamang is not active");
+
+        for (uint i = 0; i < _whitelist.length; i++) {
+            if (!kalamang.whitelist[_whitelist[i]]) {
+                continue;
+            }
+
+            kalamang.whitelist[_whitelist[i]] = false;
+
+            for (uint j = 0; j < kalamang.whitelistArray.length; j++) {
+                if (kalamang.whitelistArray[j] == _whitelist[i]) {
+                    kalamang.whitelistArray[j] = kalamang.whitelistArray[
+                        kalamang.whitelistArray.length - 1
+                    ];
+                    kalamang.whitelistArray.pop();
+                    break;
+                }
+            }
+        }
+    }
+
     function setPause(bool _isPaused) external onlyOwner {
         isPaused = _isPaused;
     }
@@ -309,9 +356,21 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         kalamangController = _kalaMangController;
     }
 
+    function setToken(address _token) external onlyOwner {
+        token = IKAP20(_token);
+    }
+
+    function setKycBitkubChain(address _kycBitkubChain) external onlyOwner {
+        kycBitkubChain = IKYCBitkubChain(_kycBitkubChain);
+    }
+
     function setSdkTransferRouter(
         address _sdkTransferRouter
     ) external onlyOwner {
         sdkTransferRouter = ISdkTransferRouter(_sdkTransferRouter);
+    }
+
+    function setOwner(address _owner) external onlyOwner {
+        owner = _owner;
     }
 }

@@ -8,6 +8,7 @@ contract KalaMangWashingControllerTestV2 {
     address public sdkCallHelperRouter;
     IKalaMangWashingStorage public kalaMangWashingStorage;
     bool public isPaused;
+    uint256 public randomSetSize;
 
     constructor(address _sdkCallHelperRouter, address _kalaMangWashingStorage) {
         sdkCallHelperRouter = _sdkCallHelperRouter;
@@ -16,6 +17,7 @@ contract KalaMangWashingControllerTestV2 {
         );
         owner = msg.sender;
         isPaused = false;
+        randomSetSize = 5;
     }
 
     modifier onlyOwner() {
@@ -95,7 +97,6 @@ contract KalaMangWashingControllerTestV2 {
         } else if (kalamangInfo.isRandom) {
             // Distribute random amounts
 
-            uint256 randomSetSize = 10;
             uint256[] memory randomSets = new uint256[](randomSetSize);
 
             for (uint256 j = 0; j < randomSetSize; j++) {
@@ -111,14 +112,15 @@ contract KalaMangWashingControllerTestV2 {
                 );
 
                 uint256 randomValueInRange = (randomFactor %
-                    (kalamangInfo.maxRandom - kalamangInfo.minRandom + 1)) +
-                    kalamangInfo.minRandom;
+                    ((kalamangInfo.maxRandom * 100) -
+                        (kalamangInfo.minRandom * 100) +
+                        1)) + (kalamangInfo.minRandom * 100);
 
                 randomSets[j] =
                     ((kalamangInfo.remainingAmounts * randomValueInRange) /
                         ((kalamangInfo.maxRecipients -
                             kalamangInfo.claimedRecipients) / 2)) /
-                    100;
+                    10000;
             }
 
             uint256 randomAmount = randomSets[
@@ -287,6 +289,58 @@ contract KalaMangWashingControllerTestV2 {
         kalaMangWashingStorage.updateWhitelist(
             _kalamangId,
             _isRequireWhitelist,
+            _whitelistArr,
+            _bitkubNext
+        );
+    }
+
+    function addWhitelist(
+        string calldata _kalamangId,
+        address[] calldata _whitelist
+    ) external {
+        kalaMangWashingStorage.addWhitelist(
+            _kalamangId,
+            _whitelist,
+            msg.sender
+        );
+    }
+
+    function addWhitelistBySdk(
+        string calldata _kalamangId,
+        bytes memory _whitelist,
+        address _bitkubNext
+    ) external onlySdkCallHelperRouter {
+        address[] memory _whitelistArr;
+        (_whitelistArr) = abi.decode(_whitelist, (address[]));
+
+        kalaMangWashingStorage.addWhitelist(
+            _kalamangId,
+            _whitelistArr,
+            _bitkubNext
+        );
+    }
+
+    function removeWhitelist(
+        string calldata _kalamangId,
+        address[] calldata _whitelist
+    ) external {
+        kalaMangWashingStorage.removeWhitelist(
+            _kalamangId,
+            _whitelist,
+            msg.sender
+        );
+    }
+
+    function removeWhitelistBySdk(
+        string calldata _kalamangId,
+        bytes memory _whitelist,
+        address _bitkubNext
+    ) external onlySdkCallHelperRouter {
+        address[] memory _whitelistArr;
+        (_whitelistArr) = abi.decode(_whitelist, (address[]));
+
+        kalaMangWashingStorage.removeWhitelist(
+            _kalamangId,
             _whitelistArr,
             _bitkubNext
         );
