@@ -240,6 +240,17 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         return myKalamangIds;
     }
 
+    function getKalamangWhitelist(
+        string calldata kalamangId
+    ) public view virtual returns (address[] memory) {
+        KalaMang storage kalamang = kalamangs[kalamangId];
+        if (kalamang.creator == address(0)) {
+            return new address[](0);
+        }
+
+        return kalamang.whitelistArray;
+    }
+
     function isInWhitelist(
         string calldata kalamangId,
         address _target
