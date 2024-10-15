@@ -66,7 +66,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
 
     function createKalamang(
         KalaMangConfig calldata _config
-    ) external override onlyKalaMangController {
+    ) external override whenNotPaused onlyKalaMangController {
         require(!kalamangsExists[_config.kalamangId], "Kalamang exists");
 
         KalaMang storage newKalamang = kalamangs[_config.kalamangId];
