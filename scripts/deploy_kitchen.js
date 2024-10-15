@@ -15,7 +15,7 @@ async function main() {
     const sdkCallHelperRouterAddress = '0x96f4C25E4fEB02c8BCbAdb80d0088E0112F728Bc';
 
     const KalaMangWashingStorageTestV2 = await ethers.getContractFactory("KalaMangWashingStorageTestV2");
-    const storageContract = await KalaMangWashingStorageTestV2.deploy(ethers.ZeroAddress, kycBitkubChainAddress, sdkTransferRouterAddress, kkubAddress);
+    const storageContract = await KalaMangWashingStorageTestV2.deploy("Kalamang_KKUB", ethers.ZeroAddress, kycBitkubChainAddress, sdkTransferRouterAddress, kkubAddress);
     console.log("KalaMangWashingStorageTestV2 deployed at:", storageContract.target);
 
     const KalaMangWashingControllerTestV2 = await ethers.getContractFactory("KalaMangWashingControllerTestV2");

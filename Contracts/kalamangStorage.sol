@@ -33,6 +33,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         _;
     }
 
+    string public kalamangName;
     address public owner;
     address public kalamangController;
     uint256 public totalKalaMangs;
@@ -48,11 +49,13 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     mapping(string => KalaMangClaimedHistory[]) private claimedHistory;
 
     constructor(
+        string memory _kalamangName,
         address _kalamangController,
         address _kycBitkubChain,
         address _sdkTransferRouter,
         address _token
     ) {
+        kalamangName = _kalamangName;
         kalamangController = _kalamangController;
         token = IKAP20(_token);
         kycBitkubChain = IKYCBitkubChain(_kycBitkubChain);
@@ -372,5 +375,9 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
 
     function setOwner(address _owner) external onlyOwner {
         owner = _owner;
+    }
+
+    function setKalamangName(string calldata _kalamangName) external onlyOwner {
+        kalamangName = _kalamangName;
     }
 }
