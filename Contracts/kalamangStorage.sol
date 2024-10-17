@@ -5,6 +5,7 @@ import "./interfaces/IKAP20.sol";
 import "./interfaces/IKYCBitkubChain.sol";
 import "./interfaces/ISdkTransferRouter.sol";
 import "./interfaces/IKalaMangWashingStorage.sol";
+import "./interfaces/IKalamangFeeStorage.sol";
 
 contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     modifier onlyOwner() {
@@ -42,6 +43,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     ISdkTransferRouter public sdkTransferRouter;
     bool public isPaused;
     string[] private kalamangIds;
+    IKalamangFeeStorage public feeStorage;
 
     mapping(string => KalaMang) private kalamangs;
     mapping(string => bool) private kalamangsExists;
@@ -51,12 +53,14 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     constructor(
         string memory _kalamangName,
         address _kalamangController,
+        address _kalamangFeeStorage,
         address _kycBitkubChain,
         address _sdkTransferRouter,
         address _token
     ) {
         kalamangName = _kalamangName;
         kalamangController = _kalamangController;
+        feeStorage = IKalamangFeeStorage(_kalamangFeeStorage);
         token = IKAP20(_token);
         kycBitkubChain = IKYCBitkubChain(_kycBitkubChain);
         sdkTransferRouter = ISdkTransferRouter(_sdkTransferRouter);
@@ -137,6 +141,17 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         kalamang.hasClaimed[_recipient] = true;
         kalamang.claimedRecipients++;
         kalamang.claimedTokens += _claimTokens;
+
+        uint256 fee = feeStorage.getFee();
+
+        if (fee > 0) {
+            uint256 feeAmount = (_claimTokens * fee) / 10000;
+            require(
+                token.transfer(address(feeStorage), feeAmount),
+                "Transfer fee failed"
+            );
+            _claimTokens -= feeAmount;
+        }
 
         claimedHistory[_kalamangId].push(
             KalaMangClaimedHistory({
@@ -371,6 +386,10 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         address _sdkTransferRouter
     ) external onlyOwner {
         sdkTransferRouter = ISdkTransferRouter(_sdkTransferRouter);
+    }
+
+    function setFeeStorage(address _feeStorage) external onlyOwner {
+        feeStorage = IKalamangFeeStorage(_feeStorage);
     }
 
     function setOwner(address _owner) external onlyOwner {

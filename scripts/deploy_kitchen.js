@@ -14,21 +14,26 @@ async function main() {
     const kkubAddress = '0x1BbE34CF9fd2E0669deEE34c68282ec1e6c44ab0';
     const sdkCallHelperRouterAddress = '0x96f4C25E4fEB02c8BCbAdb80d0088E0112F728Bc';
 
-    const KalaMangWashingStorageTestV2 = await ethers.getContractFactory("KalaMangWashingStorageTestV2");
-    const storageContract = await KalaMangWashingStorageTestV2.deploy("Kalamang_KKUB", ethers.ZeroAddress, kycBitkubChainAddress, sdkTransferRouterAddress, kkubAddress);
-    console.log("KalaMangWashingStorageTestV2 deployed at:", storageContract.target);
+    const KalamangFeeStorage = await ethers.getContractFactory("KalamangFeeStorageTestV1");
+    const feeContract = await KalamangFeeStorage.deploy(kkubAddress);
+    console.log("KalamangFeeStorage deployed at:", feeContract.target);
 
-    const KalaMangWashingControllerTestV2 = await ethers.getContractFactory("KalaMangWashingControllerTestV2");
-    const controllerContract = await KalaMangWashingControllerTestV2.deploy(sdkCallHelperRouterAddress, storageContract.target);
-    console.log("KalaMangWashingControllerTestV2 deployed at:", controllerContract.target);
+    const KalaMangWashingStorage = await ethers.getContractFactory("KalaMangWashingStorageTestV2");
+    const storageContract = await KalaMangWashingStorage.deploy("Kalamang_KKUB", ethers.ZeroAddress, feeContract.target, kycBitkubChainAddress, sdkTransferRouterAddress, kkubAddress);
+    console.log("KalaMangWashingStorage deployed at:", storageContract.target);
 
+    const KalaMangWashingController = await ethers.getContractFactory("KalaMangWashingControllerTestV2");
+    const controllerContract = await KalaMangWashingController.deploy(sdkCallHelperRouterAddress, storageContract.target);
+    console.log("KalaMangWashingController deployed at:", controllerContract.target);
+
+    await feeContract.waitForDeployment();
     await storageContract.waitForDeployment();
     await controllerContract.waitForDeployment();
 
     // Call setKalaMangController in KalaMangWashingStorageTestV2 to set the address of KalaMangWashingControllerTestV2
     const tx = await storageContract.setKalaMangController(controllerContract.target);
     await tx.wait();
-    console.log("KalaMangWashingControllerTestV2 address set in KalaMangWashingStorageTestV2");
+    console.log("KalaMangWashingController address set in KalaMangWashingStorage");
 }
 
 main()
