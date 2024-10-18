@@ -36,4 +36,8 @@ contract KalamangFeeStorageTestV1 is IKalamangFeeStorage {
     function withdrawFee() external onlyOwner {
         feeToken.transfer(owner, feeToken.balanceOf(address(this)));
     }
+
+    function setOwner(address _owner) external onlyOwner {
+        owner = _owner;
+    }
 }
