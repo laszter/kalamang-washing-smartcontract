@@ -99,14 +99,14 @@ contract KalaMangWashingControllerTestV2 {
 
             uint256[] memory randomSets = new uint256[](randomSetSize);
 
-            for (uint256 j = 0; j < randomSetSize; j++) {
+            for (uint256 index = 0; index < randomSetSize; index++) {
                 uint256 randomFactor = uint256(
                     keccak256(
                         abi.encodePacked(
                             block.timestamp,
                             _recipient,
                             _kalamangId,
-                            j
+                            index
                         )
                     )
                 );
@@ -116,10 +116,12 @@ contract KalaMangWashingControllerTestV2 {
                         (kalamangInfo.minRandom * 100) +
                         1)) + (kalamangInfo.minRandom * 100);
 
-                randomSets[j] =
-                    ((kalamangInfo.remainingAmounts * randomValueInRange) /
-                        ((kalamangInfo.maxRecipients -
-                            kalamangInfo.claimedRecipients) / 2)) /
+                uint256 fairControlFactor = (kalamangInfo.remainingAmounts /
+                    (kalamangInfo.maxRecipients -
+                        kalamangInfo.claimedRecipients)) * 2;
+
+                randomSets[index] =
+                    (fairControlFactor * randomValueInRange) /
                     10000;
             }
 

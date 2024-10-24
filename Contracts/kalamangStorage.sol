@@ -190,7 +190,10 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         for (uint256 i = 0; i < kalamangIds.length; i++) {
             KalaMang storage kalamang = kalamangs[kalamangIds[i]];
 
-            if (!kalamang.isactive) {
+            if (
+                !kalamang.isactive ||
+                kalamang.maxRecipients == kalamang.claimedRecipients
+            ) {
                 continue;
             }
 
