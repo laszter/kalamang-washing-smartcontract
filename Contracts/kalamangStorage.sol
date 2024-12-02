@@ -42,13 +42,13 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     IKYCBitkubChain public kycBitkubChain;
     ISdkTransferRouter public sdkTransferRouter;
     bool public isPaused;
-    string[] private kalamangIds;
     IKalamangFeeStorage public feeStorage;
 
-    mapping(string => KalaMang) private kalamangs;
+    mapping(string => uint256) private kalamangIds;
+    mapping(uint256 => KalaMang) private kalamangs;
     mapping(string => bool) private kalamangsExists;
     mapping(address => uint256[]) private kalamangsOwner;
-    mapping(string => KalaMangClaimedHistory[]) private claimedHistory;
+    mapping(uint256 => KalaMangClaimedHistory[]) private claimedHistory;
 
     constructor(
         string memory _kalamangName,
@@ -73,8 +73,12 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     ) external override whenNotPaused onlyKalaMangController {
         require(!kalamangsExists[_config.kalamangId], "Kalamang exists");
 
-        KalaMang storage newKalamang = kalamangs[_config.kalamangId];
+        kalamangsExists[_config.kalamangId] = true;
+        kalamangIds[_config.kalamangId] = totalKalaMangs;
+
+        KalaMang storage newKalamang = kalamangs[totalKalaMangs];
         newKalamang.creator = _config.creator;
+        newKalamang.kalamangId = _config.kalamangId;
         newKalamang.totalTokens = _config.totalTokens;
         newKalamang.claimedTokens = 0;
         newKalamang.maxRecipients = _config.maxRecipients;
@@ -90,12 +94,9 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
             newKalamang.whitelist[_config.whitelist[i]] = true;
         }
 
+        kalamangsOwner[_config.creator].push(totalKalaMangs);
+
         totalKalaMangs++;
-
-        kalamangsExists[_config.kalamangId] = true;
-        kalamangIds.push(_config.kalamangId);
-
-        kalamangsOwner[_config.creator].push(kalamangIds.length - 1);
 
         if (_config.isSdkCallerHelper) {
             sdkTransferRouter.transferKAP20(
@@ -121,7 +122,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         uint256 _claimTokens,
         address _recipient
     ) external override onlyKalaMangController returns (uint256) {
-        KalaMang storage kalamang = kalamangs[_kalamangId];
+        KalaMang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
         require(kalamang.creator != address(0), "Kalamang does not exist");
         require(kalamang.isactive, "Kalamang is not active");
         require(!kalamang.hasClaimed[_recipient], "Already claimed");
@@ -153,7 +154,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
             _claimTokens -= feeAmount;
         }
 
-        claimedHistory[_kalamangId].push(
+        claimedHistory[kalamangIds[_kalamangId]].push(
             KalaMangClaimedHistory({
                 claimedAddress: _recipient,
                 claimedAmount: _claimTokens
@@ -169,7 +170,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         string calldata _kalamangId,
         address _creator
     ) external override ownerOrKalaMangController returns (uint256) {
-        KalaMang storage kalamang = kalamangs[_kalamangId];
+        KalaMang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
         require(kalamang.creator != address(0), "Kalamang does not exist");
         require(kalamang.creator == _creator, "Invalid creator");
         require(kalamang.isactive == true, "Already aborted");
@@ -187,8 +188,8 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     }
 
     function abortAllKalamang() external onlyOwner {
-        for (uint256 i = 0; i < kalamangIds.length; i++) {
-            KalaMang storage kalamang = kalamangs[kalamangIds[i]];
+        for (uint256 i = 0; i < totalKalaMangs; i++) {
+            KalaMang storage kalamang = kalamangs[i];
 
             if (
                 !kalamang.isactive ||
@@ -209,14 +210,15 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     }
 
     function getKalamangInfo(
-        string calldata kalamangId
-    ) public view virtual override returns (KalaMangInfo memory) {
-        KalaMang storage kalamang = kalamangs[kalamangId];
+        string calldata _kalamangId
+    ) public view virtual returns (KalaMangInfo memory) {
+        uint256 _id = kalamangIds[_kalamangId];
+        KalaMang storage kalamang = kalamangs[_id];
         require(kalamang.creator != address(0), "Kalamang does not exist");
 
         KalaMangInfo memory info;
         info.creator = kalamang.creator;
-        info.kalamangId = kalamangId;
+        info.kalamangId = kalamang.kalamangId;
         info.maxRecipients = kalamang.maxRecipients;
         info.totalTokens = kalamang.totalTokens;
         info.claimedRecipients = kalamang.claimedRecipients;
@@ -235,26 +237,23 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         address _kalamangOwnerAddress,
         uint256 _page,
         uint256 _pageLength
-    ) public view virtual returns (string[] memory) {
-        uint256[] memory kalamangIdIndexes = kalamangsOwner[
-            _kalamangOwnerAddress
-        ];
-        uint256 length = kalamangIdIndexes.length;
+    ) public view virtual returns (uint256[] memory) {
+        uint256 length = kalamangsOwner[_kalamangOwnerAddress].length;
 
         // Calculate start and end index for pagination
         if (length == 0 || _page * _pageLength >= length) {
-            return new string[](0); // Return an empty array if out of bounds
+            return new uint256[](0); // Return an empty array if out of bounds
         }
 
         uint256 start = length - (_page * _pageLength);
         uint256 end = start >= _pageLength ? start - _pageLength : 0;
         uint256 resultLength = start - end;
 
-        string[] memory myKalamangIds = new string[](resultLength);
+        uint256[] memory myKalamangIds = new uint256[](resultLength);
         uint256 index = 0;
 
         for (uint256 i = start; i > end; i--) {
-            myKalamangIds[index] = kalamangIds[kalamangIdIndexes[i - 1]]; // Access element before decrementing
+            myKalamangIds[index] = kalamangsOwner[_kalamangOwnerAddress][i - 1]; // Access element before decrementing
             index++;
         }
 
@@ -262,9 +261,9 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     }
 
     function getKalamangWhitelist(
-        string calldata kalamangId
+        string calldata _kalamangId
     ) public view virtual returns (address[] memory) {
-        KalaMang storage kalamang = kalamangs[kalamangId];
+        KalaMang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
         if (kalamang.creator == address(0)) {
             return new address[](0);
         }
@@ -273,28 +272,25 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     }
 
     function isInWhitelist(
-        string calldata kalamangId,
+        string calldata _kalamangId,
         address _target
     ) public view virtual returns (bool) {
-        KalaMang storage kalamang = kalamangs[kalamangId];
+        KalaMang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
         return kalamang.creator != address(0) && kalamang.whitelist[_target];
     }
 
     function isClaimed(
-        string calldata kalamangId,
+        string calldata _kalamangId,
         address _target
     ) public view virtual returns (bool) {
-        KalaMang storage kalamang = kalamangs[kalamangId];
+        KalaMang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
         return kalamang.creator != address(0) && kalamang.hasClaimed[_target];
     }
 
     function getKalamangClaimedHistory(
         string calldata _kalamangId
     ) public view virtual returns (KalaMangClaimedHistory[] memory) {
-        KalaMang storage kalamang = kalamangs[_kalamangId];
-        require(kalamang.creator != address(0), "Kalamang does not exist");
-
-        return claimedHistory[_kalamangId];
+        return claimedHistory[kalamangIds[_kalamangId]];
     }
 
     function updateWhitelist(
@@ -303,7 +299,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         address[] calldata _whitelist,
         address _creator
     ) external override onlyKalaMangController {
-        KalaMang storage kalamang = kalamangs[_kalamangId];
+        KalaMang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
         require(kalamang.creator == _creator, "Invalid creator");
         require(kalamang.isactive, "Kalamang is not active");
 
@@ -325,7 +321,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         address[] calldata _whitelist,
         address _creator
     ) external override onlyKalaMangController {
-        KalaMang storage kalamang = kalamangs[_kalamangId];
+        KalaMang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
         require(kalamang.creator == _creator, "Invalid creator");
         require(kalamang.isactive, "Kalamang is not active");
 
@@ -344,7 +340,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         address[] calldata _whitelist,
         address _creator
     ) external override onlyKalaMangController {
-        KalaMang storage kalamang = kalamangs[_kalamangId];
+        KalaMang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
         require(kalamang.creator == _creator, "Invalid creator");
         require(kalamang.isactive, "Kalamang is not active");
 

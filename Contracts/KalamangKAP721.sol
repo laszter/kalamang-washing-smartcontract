@@ -7,7 +7,20 @@ import "./abstracts/KAP721.sol";
 contract KalamangWashing is KAP721 {
     using EnumerableSetUint for EnumerableSetUint.UintSet;
 
+    address public kalamangStorageAddress;
+
+    mapping(uint256 => address[]) private kalamangWhitelist;
+
+    modifier onlyKalamangStorage() {
+        require(
+            msg.sender == kalamangStorageAddress,
+            "KalamangWashing: Only KalamangStorage can call"
+        );
+        _;
+    }
+
     constructor(
+        address kalamangStorageAddress_,
         address transferRouter_,
         address adminRouter_,
         address kyc_,
@@ -25,6 +38,7 @@ contract KalamangWashing is KAP721 {
         )
     {
         _setBaseURI("");
+        kalamangStorageAddress = kalamangStorageAddress_;
         transferRouter = transferRouter_;
     }
 
@@ -66,8 +80,14 @@ contract KalamangWashing is KAP721 {
 
     ///////////////////////////////////////////////////////////////////////////////////////
 
-    function mint(address _to, uint256 _tokenId) external {
-        _mint(_to, _tokenId);
+    function mintKalamang(
+        address _to,
+        string memory _tokenURI,
+        uint256 _tokenId
+    ) external onlyKalamangStorage {
+        _mintWithMetadata(_to, _tokenURI, _tokenId);
+
+        emit MintWithMetadata(_to, _tokenURI, _tokenId);
     }
 
     function mintWithMetadata(
@@ -89,5 +109,13 @@ contract KalamangWashing is KAP721 {
     ) internal {
         _mint(_to, _tokenId);
         _setTokenURI(_tokenId, _tokenURI);
+    }
+
+    function burn(
+        address _from,
+        uint256 _tokenId
+    ) external onlySuperAdminOrAdmin {
+        require(ownerOf(_tokenId) == _from, "Not owner of token");
+        _burn(_tokenId);
     }
 }

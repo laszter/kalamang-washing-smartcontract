@@ -7,7 +7,7 @@ async function main() {
         deployer.address
     );
 
-    const StickyMan = await ethers.getContractFactory("StickyMan");
+    const StickyMan = await ethers.getContractFactory("KalamangWashing");
     // const contract = await StickyMan.deploy(
     //     "0x70E7702bE0D8Bbe746C2fd521F6260Af8Ec9b70A",
     //     "0x0Fe7773B44b2CFE4C9778616Db526359Ccda16bE",
@@ -23,9 +23,8 @@ async function main() {
     const contract = StickyMan.attach("0xfDdF940B30929c2C5825607c7439f73B7FFb753c");
 
     const tx = await contract.mintWithMetadata(deployer.address, JSON.stringify({
-        "description": "ตัวก่างเล็ก",
-        "name": "Sticky Man Mini",
-        "rarity": "R",
+        "description": "ตัวก่างมีปีก",
+        "name": "Sticky Man Wing",
         "attributes": [
             {
                 "trait_type": "Rarity",
@@ -48,8 +47,8 @@ async function main() {
                 "value": "50",
             }
         ],
-        "image": "https://ipfs.io/ipfs/QmexeUZKZLoB2WQgs1ruLkP2tVh87um4gVtBsXyhYUDuV8"
-    }), 7);
+        "image": "https://bafybeibe7fghstg3zo2egbmp7vdxoxkaxo4bguxonktmqmlazrrdckw2ki.ipfs.dweb.link"
+    }), 8);
     await tx.wait();
     console.log("NFT minted with metadata");
 }

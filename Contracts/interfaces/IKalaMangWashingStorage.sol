@@ -5,6 +5,7 @@ pragma solidity ^0.8.0;
 interface IKalaMangWashingStorage {
     struct KalaMang {
         address creator;
+        string kalamangId;
         uint256 totalTokens;
         uint256 claimedTokens;
         uint256 maxRecipients;
