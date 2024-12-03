@@ -7,7 +7,7 @@ import "./interfaces/ISdkTransferRouter.sol";
 import "./interfaces/IKalaMangWashingStorage.sol";
 import "./interfaces/IKalamangFeeStorage.sol";
 
-contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
+contract KalaMangWashingStorage is IKalaMangWashingStorage {
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can call this function");
         _;
@@ -34,11 +34,9 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         _;
     }
 
-    string public kalamangName;
     address public owner;
     address public kalamangController;
     uint256 public totalKalaMangs;
-    IKAP20 public token;
     IKYCBitkubChain public kycBitkubChain;
     ISdkTransferRouter public sdkTransferRouter;
     bool public isPaused;
@@ -50,18 +48,16 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     mapping(address => uint256[]) private kalamangsOwner;
     mapping(uint256 => KalaMangClaimedHistory[]) private claimedHistory;
 
+    mapping(address => bool) allowTokenAddress;
+
     constructor(
-        string memory _kalamangName,
         address _kalamangController,
         address _kalamangFeeStorage,
         address _kycBitkubChain,
-        address _sdkTransferRouter,
-        address _token
+        address _sdkTransferRouter
     ) {
-        kalamangName = _kalamangName;
         kalamangController = _kalamangController;
         feeStorage = IKalamangFeeStorage(_kalamangFeeStorage);
-        token = IKAP20(_token);
         kycBitkubChain = IKYCBitkubChain(_kycBitkubChain);
         sdkTransferRouter = ISdkTransferRouter(_sdkTransferRouter);
         owner = msg.sender;
@@ -71,6 +67,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
     function createKalamang(
         KalaMangConfig calldata _config
     ) external override whenNotPaused onlyKalaMangController {
+        require(allowTokenAddress[_config.tokenAddress], "Token not allowed");
         require(!kalamangsExists[_config.kalamangId], "Kalamang exists");
 
         kalamangsExists[_config.kalamangId] = true;
@@ -79,6 +76,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         KalaMang storage newKalamang = kalamangs[totalKalaMangs];
         newKalamang.creator = _config.creator;
         newKalamang.kalamangId = _config.kalamangId;
+        newKalamang.tokenAddress = _config.tokenAddress;
         newKalamang.totalTokens = _config.totalTokens;
         newKalamang.claimedTokens = 0;
         newKalamang.maxRecipients = _config.maxRecipients;
@@ -100,14 +98,15 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
 
         if (_config.isSdkCallerHelper) {
             sdkTransferRouter.transferKAP20(
-                address(token),
+                _config.tokenAddress,
                 address(this),
                 _config.totalTokens,
                 _config.creator
             );
         } else {
+            IKAP20 _token = IKAP20(_config.tokenAddress);
             require(
-                token.transferFrom(
+                _token.transferFrom(
                     _config.creator,
                     address(this),
                     _config.totalTokens
@@ -139,16 +138,18 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
             "All tokens have been claimed"
         );
 
+        IKAP20 _token = IKAP20(kalamang.tokenAddress);
+
         kalamang.hasClaimed[_recipient] = true;
         kalamang.claimedRecipients++;
         kalamang.claimedTokens += _claimTokens;
 
-        uint256 fee = feeStorage.getFee();
+        uint256 _fee = feeStorage.getFee();
 
-        if (fee > 0) {
-            uint256 feeAmount = (_claimTokens * fee) / 10000;
+        if (_fee > 0) {
+            uint256 feeAmount = (_claimTokens * _fee) / 10000;
             require(
-                token.transfer(address(feeStorage), feeAmount),
+                _token.transfer(address(feeStorage), feeAmount),
                 "Transfer fee failed"
             );
             _claimTokens -= feeAmount;
@@ -161,7 +162,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
             })
         );
 
-        require(token.transfer(_recipient, _claimTokens), "Transfer failed");
+        require(_token.transfer(_recipient, _claimTokens), "Transfer failed");
 
         return _claimTokens;
     }
@@ -175,16 +176,18 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         require(kalamang.creator == _creator, "Invalid creator");
         require(kalamang.isactive == true, "Already aborted");
 
-        uint256 amount = kalamang.totalTokens - kalamang.claimedTokens;
+        IKAP20 _token = IKAP20(kalamang.tokenAddress);
+
+        uint256 _amount = kalamang.totalTokens - kalamang.claimedTokens;
 
         require(
-            token.transfer(kalamang.creator, amount),
+            _token.transfer(kalamang.creator, _amount),
             "Token transfer failed"
         );
 
         kalamang.isactive = false;
 
-        return amount;
+        return _amount;
     }
 
     function abortAllKalamang() external onlyOwner {
@@ -198,10 +201,12 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
                 continue;
             }
 
-            uint256 amount = kalamang.totalTokens - kalamang.claimedTokens;
+            IKAP20 _token = IKAP20(kalamang.tokenAddress);
+
+            uint256 _amount = kalamang.totalTokens - kalamang.claimedTokens;
 
             require(
-                token.transfer(kalamang.creator, amount),
+                _token.transfer(kalamang.creator, _amount),
                 "Token transfer failed"
             );
 
@@ -219,6 +224,7 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         KalaMangInfo memory info;
         info.creator = kalamang.creator;
         info.kalamangId = kalamang.kalamangId;
+        info.tokenAddress = kalamang.tokenAddress;
         info.maxRecipients = kalamang.maxRecipients;
         info.totalTokens = kalamang.totalTokens;
         info.claimedRecipients = kalamang.claimedRecipients;
@@ -233,31 +239,53 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         return info;
     }
 
-    function getMyKalamangs(
+    function getKalamangsByPage(
         address _kalamangOwnerAddress,
         uint256 _page,
         uint256 _pageLength
-    ) public view virtual returns (uint256[] memory) {
-        uint256 length = kalamangsOwner[_kalamangOwnerAddress].length;
+    ) public view virtual returns (string[] memory) {
+        uint256 _totalMyKalamang = kalamangsOwner[_kalamangOwnerAddress].length;
 
         // Calculate start and end index for pagination
-        if (length == 0 || _page * _pageLength >= length) {
-            return new uint256[](0); // Return an empty array if out of bounds
+        if (
+            _totalMyKalamang == 0 ||
+            ((_page - 1) * _pageLength) >= _totalMyKalamang
+        ) {
+            return new string[](0); // Return an empty array if out of bounds
         }
 
-        uint256 start = length - (_page * _pageLength);
-        uint256 end = start >= _pageLength ? start - _pageLength : 0;
-        uint256 resultLength = start - end;
-
-        uint256[] memory myKalamangIds = new uint256[](resultLength);
-        uint256 index = 0;
-
-        for (uint256 i = start; i > end; i--) {
-            myKalamangIds[index] = kalamangsOwner[_kalamangOwnerAddress][i - 1]; // Access element before decrementing
-            index++;
+        uint256 _start = _totalMyKalamang - ((_page - 1) * _pageLength);
+        if (_start < 0) {
+            _start = _totalMyKalamang - 1;
         }
 
-        return myKalamangIds;
+        uint256 _end = _start > _pageLength ? _start - _pageLength : 0;
+        uint256 _resultLength = _start - _end;
+
+        string[] memory _myKalamangIds = new string[](_resultLength);
+        uint256 _index = 0;
+
+        for (uint256 i = _start; i > _end; i--) {
+            _myKalamangIds[_index++] = kalamangs[
+                kalamangsOwner[_kalamangOwnerAddress][i - 1]
+            ].kalamangId; // Access element before decrementing
+        }
+
+        return _myKalamangIds;
+    }
+
+    function getAllMyKalamangs() public view returns (string[] memory) {
+        uint256 _totalMyKalamang = kalamangsOwner[msg.sender].length;
+        string[] memory _myKalamangIds = new string[](_totalMyKalamang);
+        uint256 _index = 0;
+
+        for (uint256 i = _totalMyKalamang; i > 0; i--) {
+            _myKalamangIds[_index++] = kalamangs[
+                kalamangsOwner[msg.sender][i - 1]
+            ].kalamangId; // Access element before decrementing
+        }
+
+        return _myKalamangIds;
     }
 
     function getKalamangWhitelist(
@@ -373,10 +401,6 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         kalamangController = _kalaMangController;
     }
 
-    function setToken(address _token) external onlyOwner {
-        token = IKAP20(_token);
-    }
-
     function setKycBitkubChain(address _kycBitkubChain) external onlyOwner {
         kycBitkubChain = IKYCBitkubChain(_kycBitkubChain);
     }
@@ -395,7 +419,10 @@ contract KalaMangWashingStorageTestV2 is IKalaMangWashingStorage {
         owner = _owner;
     }
 
-    function setKalamangName(string calldata _kalamangName) external onlyOwner {
-        kalamangName = _kalamangName;
+    function setAllowTokenAddress(
+        address _tokenAddress,
+        bool _allow
+    ) external onlyOwner {
+        allowTokenAddress[_tokenAddress] = _allow;
     }
 }

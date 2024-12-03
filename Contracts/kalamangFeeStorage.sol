@@ -5,7 +5,7 @@ pragma solidity ^0.8.19;
 import "./interfaces/IKAP20.sol";
 import "./interfaces/IKalamangFeeStorage.sol";
 
-contract KalamangFeeStorageTestV1 is IKalamangFeeStorage {
+contract KalamangFeeStorage is IKalamangFeeStorage {
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can call this function");
         _;
@@ -13,12 +13,10 @@ contract KalamangFeeStorageTestV1 is IKalamangFeeStorage {
 
     address owner;
     uint256 public fee;
-    IKAP20 public feeToken;
 
-    constructor(address _tokenAddress) {
+    constructor() {
         owner = msg.sender;
         fee = 0;
-        feeToken = IKAP20(_tokenAddress);
     }
 
     function setFee(uint256 _fee) external onlyOwner {
@@ -29,12 +27,16 @@ contract KalamangFeeStorageTestV1 is IKalamangFeeStorage {
         return fee;
     }
 
-    function setFeeToken(address _tokenAddress) external onlyOwner {
-        feeToken = IKAP20(_tokenAddress);
-    }
-
-    function withdrawFee() external onlyOwner {
-        feeToken.transfer(owner, feeToken.balanceOf(address(this)));
+    function withdrawFee(
+        address[] calldata _tokenAddresses
+    ) external onlyOwner {
+        for (uint256 i = 0; i < _tokenAddresses.length; i++) {
+            IKAP20 _feeToken = IKAP20(_tokenAddresses[i]);
+            require(
+                _feeToken.transfer(owner, _feeToken.balanceOf(address(this))),
+                "Withdraw fee failed"
+            );
+        }
     }
 
     function setOwner(address _owner) external onlyOwner {

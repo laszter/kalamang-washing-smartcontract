@@ -14,15 +14,15 @@ async function main() {
     const kkubAddress = '0x1BbE34CF9fd2E0669deEE34c68282ec1e6c44ab0';
     const sdkCallHelperRouterAddress = '0x96f4C25E4fEB02c8BCbAdb80d0088E0112F728Bc';
 
-    const KalamangFeeStorage = await ethers.getContractFactory("KalamangFeeStorageTestV1");
-    const feeContract = await KalamangFeeStorage.deploy(kkubAddress);
+    const KalamangFeeStorage = await ethers.getContractFactory("KalamangFeeStorage");
+    const feeContract = await KalamangFeeStorage.deploy();
     console.log("KalamangFeeStorage deployed at:", feeContract.target);
 
-    const KalaMangWashingStorage = await ethers.getContractFactory("KalaMangWashingStorageTestV2");
-    const storageContract = await KalaMangWashingStorage.deploy("Kalamang_KKUB", ethers.ZeroAddress, feeContract.target, kycBitkubChainAddress, sdkTransferRouterAddress, kkubAddress);
+    const KalaMangWashingStorage = await ethers.getContractFactory("KalaMangWashingStorage");
+    const storageContract = await KalaMangWashingStorage.deploy(ethers.ZeroAddress, feeContract.target, kycBitkubChainAddress, sdkTransferRouterAddress);
     console.log("KalaMangWashingStorage deployed at:", storageContract.target);
 
-    const KalaMangWashingController = await ethers.getContractFactory("KalaMangWashingControllerTestV2");
+    const KalaMangWashingController = await ethers.getContractFactory("KalaMangWashingController");
     const controllerContract = await KalaMangWashingController.deploy(sdkCallHelperRouterAddress, storageContract.target);
     console.log("KalaMangWashingController deployed at:", controllerContract.target);
 
@@ -34,6 +34,12 @@ async function main() {
     const tx = await storageContract.setKalaMangController(controllerContract.target);
     await tx.wait();
     console.log("KalaMangWashingController address set in KalaMangWashingStorage");
+
+    // const storageContract = KalaMangWashingStorage.attach("0x098acb9a9FdDDCa55DCd00cb96fccA755561f34d");
+
+    const tx2 = await storageContract.setAllowTokenAddress(kkubAddress, true);
+    await tx2.wait();
+    console.log("KKUB address set allow in KalaMangWashingStorage");
 }
 
 main()

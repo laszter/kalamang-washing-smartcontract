@@ -3,7 +3,7 @@ pragma solidity ^0.8.19;
 
 import "./interfaces/IKalaMangWashingStorage.sol";
 
-contract KalaMangWashingControllerTestV2 {
+contract KalaMangWashingController {
     address public owner;
     address public sdkCallHelperRouter;
     IKalaMangWashingStorage public kalaMangWashingStorage;
@@ -118,7 +118,9 @@ contract KalaMangWashingControllerTestV2 {
 
                 uint256 fairControlFactor = (kalamangInfo.remainingAmounts /
                     (kalamangInfo.maxRecipients -
-                        kalamangInfo.claimedRecipients)) * 2;
+                        kalamangInfo.claimedRecipients));
+
+                fairControlFactor += fairControlFactor;
 
                 randomSets[index] =
                     (fairControlFactor * randomValueInRange) /
@@ -156,6 +158,7 @@ contract KalaMangWashingControllerTestV2 {
     }
 
     function createKalamang(
+        address _tokenAddress,
         uint256 _totalTokens,
         uint256 _maxRecipients,
         bool _isRandom,
@@ -174,6 +177,7 @@ contract KalaMangWashingControllerTestV2 {
             memory kalamangConfig = IKalaMangWashingStorage.KalaMangConfig(
                 kalamangId,
                 msg.sender,
+                _tokenAddress,
                 _totalTokens,
                 _maxRecipients,
                 _isRandom,
@@ -196,6 +200,7 @@ contract KalaMangWashingControllerTestV2 {
     }
 
     function createKalamangBySdk(
+        address _tokenAddress,
         uint256 _totalTokens,
         uint256 _maxRecipients,
         bool _isRandom,
@@ -218,6 +223,7 @@ contract KalaMangWashingControllerTestV2 {
             memory kalamangConfig = IKalaMangWashingStorage.KalaMangConfig(
                 kalamangId,
                 _bitkubNext,
+                _tokenAddress,
                 _totalTokens,
                 _maxRecipients,
                 _isRandom,

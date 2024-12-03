@@ -6,6 +6,7 @@ interface IKalaMangWashingStorage {
     struct KalaMang {
         address creator;
         string kalamangId;
+        address tokenAddress;
         uint256 totalTokens;
         uint256 claimedTokens;
         uint256 maxRecipients;
@@ -24,6 +25,7 @@ interface IKalaMangWashingStorage {
     struct KalaMangInfo {
         address creator;
         string kalamangId;
+        address tokenAddress;
         uint256 maxRecipients;
         uint256 claimedRecipients;
         bool isRandom;
@@ -44,6 +46,7 @@ interface IKalaMangWashingStorage {
     struct KalaMangConfig {
         string kalamangId;
         address creator;
+        address tokenAddress;
         uint256 totalTokens;
         uint256 maxRecipients;
         bool isRandom;
