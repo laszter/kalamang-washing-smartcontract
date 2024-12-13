@@ -21,20 +21,26 @@ contract KalaMangWashingController {
     }
 
     modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this function");
+        require(
+            msg.sender == owner,
+            "KalaMangWashingController : Only owner can call this function"
+        );
         _;
     }
 
     modifier onlySdkCallHelperRouter() {
         require(
             msg.sender == sdkCallHelperRouter,
-            "Only sdkCallHelperRouter can call this function"
+            "KalaMangWashingController : Only sdkCallHelperRouter can call this function"
         );
         _;
     }
 
     modifier whenNotPaused() {
-        require(!isPaused, "The contract pause create kalamang");
+        require(
+            !isPaused,
+            "KalaMangWashingController : The contract pause create kalamang"
+        );
         _;
     }
 
@@ -86,59 +92,38 @@ contract KalaMangWashingController {
                 _kalamangId
             );
 
-        uint256 claimAmount = 0;
-
         if (!kalamangInfo.isactive) {
-            return claimAmount;
+            return 0;
         }
 
+        uint256 claimAmount;
+
         if (kalamangInfo.claimedRecipients + 1 == kalamangInfo.maxRecipients) {
-            claimAmount = kalamangInfo.remainingAmounts;
-        } else if (kalamangInfo.isRandom) {
-            // Distribute random amounts
+            // Directly assign remaining amounts if it’s the last recipient
+            return kalamangInfo.remainingAmounts;
+        }
 
-            uint256[] memory randomSets = new uint256[](randomSetSize);
+        if (kalamangInfo.isRandom) {
+            // Precompute constants and minimize repetitive calculations
+            uint256 recipientsLeft = kalamangInfo.maxRecipients -
+                kalamangInfo.claimedRecipients;
+            uint256 fairControlFactor = (kalamangInfo.remainingAmounts * 2) /
+                recipientsLeft;
+            uint256 range = (kalamangInfo.maxRandom - kalamangInfo.minRandom) *
+                100 +
+                1;
+            uint256 minRandomScaled = kalamangInfo.minRandom * 100;
 
-            for (uint256 index = 0; index < randomSetSize; index++) {
-                uint256 randomFactor = uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            block.timestamp,
-                            _recipient,
-                            _kalamangId,
-                            index
-                        )
-                    )
-                );
+            uint256 randomFactor = uint256(
+                keccak256(
+                    abi.encodePacked(block.timestamp, _recipient, _kalamangId)
+                )
+            );
 
-                uint256 randomValueInRange = (randomFactor %
-                    ((kalamangInfo.maxRandom * 100) -
-                        (kalamangInfo.minRandom * 100) +
-                        1)) + (kalamangInfo.minRandom * 100);
-
-                uint256 fairControlFactor = (kalamangInfo.remainingAmounts /
-                    (kalamangInfo.maxRecipients -
-                        kalamangInfo.claimedRecipients));
-
-                fairControlFactor += fairControlFactor;
-
-                randomSets[index] =
-                    (fairControlFactor * randomValueInRange) /
-                    10000;
-            }
-
-            uint256 randomAmount = randomSets[
-                (uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            block.timestamp,
-                            _recipient,
-                            _kalamangId,
-                            block.number
-                        )
-                    )
-                ) % randomSetSize)
-            ];
+            uint256 randomValueInRange = (randomFactor % range) +
+                minRandomScaled;
+            uint256 randomAmount = (fairControlFactor * randomValueInRange) /
+                10000;
 
             if (randomAmount > kalamangInfo.remainingAmounts) {
                 randomAmount = kalamangInfo.remainingAmounts;
@@ -146,7 +131,7 @@ contract KalaMangWashingController {
 
             claimAmount = randomAmount;
         } else {
-            // Distribute equal amounts
+            // Distribute equal amounts directly
             claimAmount = kalamangInfo.totalTokens / kalamangInfo.maxRecipients;
 
             if (claimAmount > kalamangInfo.remainingAmounts) {
@@ -168,8 +153,14 @@ contract KalaMangWashingController {
         uint256 _acceptedKYCLevel,
         address[] calldata _whitelist
     ) external whenNotPaused {
-        require(_totalTokens > 0, "Total tokens must be greater than zero");
-        require(_maxRecipients > 0, "Max recipients must be greater than zero");
+        require(
+            _totalTokens > 0,
+            "KalaMangWashingController : Total tokens must be greater than zero"
+        );
+        require(
+            _maxRecipients > 0,
+            "KalaMangWashingController : Max recipients must be greater than zero"
+        );
 
         string memory kalamangId = generateRandomString(64);
 
@@ -211,8 +202,14 @@ contract KalaMangWashingController {
         bytes memory _whitelist,
         address _bitkubNext
     ) external onlySdkCallHelperRouter whenNotPaused {
-        require(_totalTokens > 0, "Total tokens must be greater than zero");
-        require(_maxRecipients > 0, "Max recipients must be greater than zero");
+        require(
+            _totalTokens > 0,
+            "KalaMangWashingController : Total tokens must be greater than zero"
+        );
+        require(
+            _maxRecipients > 0,
+            "KalaMangWashingController : Max recipients must be greater than zero"
+        );
 
         string memory kalamangId = generateRandomString(64);
 

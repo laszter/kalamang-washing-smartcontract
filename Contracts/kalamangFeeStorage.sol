@@ -7,7 +7,10 @@ import "./interfaces/IKalamangFeeStorage.sol";
 
 contract KalamangFeeStorage is IKalamangFeeStorage {
     modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this function");
+        require(
+            msg.sender == owner,
+            "KalamangFeeStorage : Only owner can call this function"
+        );
         _;
     }
 
@@ -34,7 +37,7 @@ contract KalamangFeeStorage is IKalamangFeeStorage {
             IKAP20 _feeToken = IKAP20(_tokenAddresses[i]);
             require(
                 _feeToken.transfer(owner, _feeToken.balanceOf(address(this))),
-                "Withdraw fee failed"
+                "KalamangFeeStorage : Withdraw fee failed"
             );
         }
     }
