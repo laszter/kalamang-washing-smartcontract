@@ -44,6 +44,7 @@ contract KalaMangWashingStorage is IKalaMangWashingStorage {
     ISdkTransferRouter public sdkTransferRouter;
     bool public isPaused;
     IKalamangFeeStorage public feeStorage;
+    bool public isAllowAllTokens;
 
     mapping(string => uint256) private kalamangIds;
     mapping(uint256 => KalaMang) private kalamangs;
@@ -65,13 +66,14 @@ contract KalaMangWashingStorage is IKalaMangWashingStorage {
         sdkTransferRouter = ISdkTransferRouter(_sdkTransferRouter);
         owner = msg.sender;
         isPaused = false;
+        isAllowAllTokens = false;
     }
 
     function createKalamang(
         KalaMangConfig calldata _config
     ) external override whenNotPaused onlyKalaMangController {
         require(
-            allowTokenAddress[_config.tokenAddress],
+            allowTokenAddress[_config.tokenAddress] || isAllowAllTokens,
             "KalaMangWashingStorage : Token not allowed"
         );
         require(
@@ -475,5 +477,9 @@ contract KalaMangWashingStorage is IKalaMangWashingStorage {
         bool _allow
     ) external onlyOwner {
         allowTokenAddress[_tokenAddress] = _allow;
+    }
+
+    function setIsAllowAllTokens(bool _allow) external onlyOwner {
+        isAllowAllTokens = _allow;
     }
 }
