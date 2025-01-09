@@ -256,10 +256,13 @@ contract KalaMangWashingStorage is IKalaMangWashingStorage {
             "KalaMangWashingStorage : Kalamang does not exist"
         );
 
+        IKAP20 _token = IKAP20(kalamang.tokenAddress);
+
         KalaMangInfo memory info;
         info.creator = kalamang.creator;
         info.kalamangId = kalamang.kalamangId;
         info.tokenAddress = kalamang.tokenAddress;
+        info.tokenSymbol = _token.symbol();
         info.maxRecipients = kalamang.maxRecipients;
         info.totalTokens = kalamang.totalTokens;
         info.claimedRecipients = kalamang.claimedRecipients;

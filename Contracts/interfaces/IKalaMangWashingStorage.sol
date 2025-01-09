@@ -26,6 +26,7 @@ interface IKalaMangWashingStorage {
         address creator;
         string kalamangId;
         address tokenAddress;
+        string tokenSymbol;
         uint256 maxRecipients;
         uint256 claimedRecipients;
         bool isRandom;
