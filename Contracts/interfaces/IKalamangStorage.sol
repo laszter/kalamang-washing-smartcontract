@@ -2,8 +2,8 @@
 
 pragma solidity ^0.8.0;
 
-interface IKalaMangWashingStorage {
-    struct KalaMang {
+interface IKalamangStorage {
+    struct Kalamang {
         address creator;
         string kalamangId;
         address tokenAddress;
@@ -22,7 +22,7 @@ interface IKalaMangWashingStorage {
         bool isactive;
     }
 
-    struct KalaMangInfo {
+    struct KalamangInfo {
         address creator;
         string kalamangId;
         address tokenAddress;
@@ -39,12 +39,12 @@ interface IKalaMangWashingStorage {
         bool isactive;
     }
 
-    struct KalaMangClaimedHistory {
+    struct KalamangClaimedHistory {
         address claimedAddress;
         uint claimedAmount;
     }
 
-    struct KalaMangConfig {
+    struct KalamangConfig {
         string kalamangId;
         address creator;
         address tokenAddress;
@@ -59,7 +59,7 @@ interface IKalaMangWashingStorage {
         bool isSdkCallerHelper;
     }
 
-    function createKalamang(KalaMangConfig calldata _config) external;
+    function createKalamang(KalamangConfig calldata _config) external;
 
     function claimToken(
         string calldata _kalamangId,
@@ -74,7 +74,7 @@ interface IKalaMangWashingStorage {
 
     function getKalamangInfo(
         string calldata _kalamangId
-    ) external view returns (KalaMangInfo memory);
+    ) external view returns (KalamangInfo memory);
 
     function updateWhitelist(
         string calldata _kalamangId,

@@ -18,32 +18,32 @@ async function main() {
     const feeContract = await KalamangFeeStorage.deploy();
     console.log("KalamangFeeStorage deployed at:", feeContract.target);
 
-    const KalaMangWashingStorage = await ethers.getContractFactory("KalaMangWashingStorage");
-    const storageContract = await KalaMangWashingStorage.deploy(ethers.ZeroAddress, feeContract.target, kycBitkubChainAddress, sdkTransferRouterAddress);
-    console.log("KalaMangWashingStorage deployed at:", storageContract.target);
+    const KalamangStorage = await ethers.getContractFactory("KalamangStorage");
+    const storageContract = await KalamangStorage.deploy(ethers.ZeroAddress, feeContract.target, kycBitkubChainAddress, sdkTransferRouterAddress);
+    console.log("KalamangStorage deployed at:", storageContract.target);
 
-    const KalaMangWashingController = await ethers.getContractFactory("KalaMangWashingController");
-    const controllerContract = await KalaMangWashingController.deploy(sdkCallHelperRouterAddress, storageContract.target);
-    console.log("KalaMangWashingController deployed at:", controllerContract.target);
+    const KalamangController = await ethers.getContractFactory("KalamangController");
+    const controllerContract = await KalamangController.deploy(sdkCallHelperRouterAddress, storageContract.target);
+    console.log("KalamangController deployed at:", controllerContract.target);
 
     await feeContract.waitForDeployment();
     await storageContract.waitForDeployment();
     await controllerContract.waitForDeployment();
 
-    // Call setKalaMangController in KalaMangWashingStorageTestV2 to set the address of KalaMangWashingControllerTestV2
+    // Call setKalaMangController in KalamangStorage to set the address of KalamangControllerTestV2
     const tx = await storageContract.setKalaMangController(controllerContract.target);
     await tx.wait();
-    console.log("KalaMangWashingController address set in KalaMangWashingStorage");
+    console.log("KalamangController address set in KalamangStorage");
 
-    // const storageContract = KalaMangWashingStorage.attach("0x314600B9D6e5F79a9BeaA92395b34CEBaa4593d0");
+    // const storageContract = KalamangStorage.attach("0x314600B9D6e5F79a9BeaA92395b34CEBaa4593d0");
 
     const tx2 = await storageContract.setAllowTokenAddress(kkubAddress, true);
     await tx2.wait();
-    console.log("KKUB address set allow in KalaMangWashingStorage");
+    console.log("KKUB address set allow in KalamangStorage");
 
     const tx3 = await storageContract.setAllowTokenAddress("0x24B271FA748504241b20473249fcA14983C76D7d", true);
     await tx3.wait();
-    console.log("KK address set allow in KalaMangWashingStorage");
+    console.log("KK address set allow in KalamangStorage");
 }
 
 main()

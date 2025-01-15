@@ -1,20 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "./interfaces/IKalaMangWashingStorage.sol";
+import "./interfaces/IKalamangStorage.sol";
 
-contract KalaMangWashingController {
+contract KalamangController {
     address public owner;
     address public sdkCallHelperRouter;
-    IKalaMangWashingStorage public kalaMangWashingStorage;
+    IKalamangStorage public kalamangStorage;
     bool public isPaused;
     uint256 public randomSetSize;
 
-    constructor(address _sdkCallHelperRouter, address _kalaMangWashingStorage) {
+    constructor(address _sdkCallHelperRouter, address _kalamangStorage) {
         sdkCallHelperRouter = _sdkCallHelperRouter;
-        kalaMangWashingStorage = IKalaMangWashingStorage(
-            _kalaMangWashingStorage
-        );
+        kalamangStorage = IKalamangStorage(_kalamangStorage);
         owner = msg.sender;
         isPaused = false;
         randomSetSize = 5;
@@ -23,7 +21,7 @@ contract KalaMangWashingController {
     modifier onlyOwner() {
         require(
             msg.sender == owner,
-            "KalaMangWashingController : Only owner can call this function"
+            "KalamangController : Only owner can call this function"
         );
         _;
     }
@@ -31,7 +29,7 @@ contract KalaMangWashingController {
     modifier onlySdkCallHelperRouter() {
         require(
             msg.sender == sdkCallHelperRouter,
-            "KalaMangWashingController : Only sdkCallHelperRouter can call this function"
+            "KalamangController : Only sdkCallHelperRouter can call this function"
         );
         _;
     }
@@ -39,7 +37,7 @@ contract KalaMangWashingController {
     modifier whenNotPaused() {
         require(
             !isPaused,
-            "KalaMangWashingController : The contract pause create kalamang"
+            "KalamangController : The contract pause create kalamang"
         );
         _;
     }
@@ -87,10 +85,8 @@ contract KalaMangWashingController {
         string calldata _kalamangId,
         address _recipient
     ) private view returns (uint256) {
-        IKalaMangWashingStorage.KalaMangInfo
-            memory kalamangInfo = kalaMangWashingStorage.getKalamangInfo(
-                _kalamangId
-            );
+        IKalamangStorage.KalamangInfo memory kalamangInfo = kalamangStorage
+            .getKalamangInfo(_kalamangId);
 
         if (!kalamangInfo.isactive) {
             return 0;
@@ -155,17 +151,17 @@ contract KalaMangWashingController {
     ) external whenNotPaused {
         require(
             _totalTokens > 0,
-            "KalaMangWashingController : Total tokens must be greater than zero"
+            "KalamangController : Total tokens must be greater than zero"
         );
         require(
             _maxRecipients > 0,
-            "KalaMangWashingController : Max recipients must be greater than zero"
+            "KalamangController : Max recipients must be greater than zero"
         );
 
         string memory kalamangId = generateRandomString(64);
 
-        IKalaMangWashingStorage.KalaMangConfig
-            memory kalamangConfig = IKalaMangWashingStorage.KalaMangConfig(
+        IKalamangStorage.KalamangConfig memory kalamangConfig = IKalamangStorage
+            .KalamangConfig(
                 kalamangId,
                 msg.sender,
                 _tokenAddress,
@@ -180,7 +176,7 @@ contract KalaMangWashingController {
                 false
             );
 
-        kalaMangWashingStorage.createKalamang(kalamangConfig);
+        kalamangStorage.createKalamang(kalamangConfig);
 
         emit KalamangCreated(
             kalamangId,
@@ -204,11 +200,11 @@ contract KalaMangWashingController {
     ) external onlySdkCallHelperRouter whenNotPaused {
         require(
             _totalTokens > 0,
-            "KalaMangWashingController : Total tokens must be greater than zero"
+            "KalamangController : Total tokens must be greater than zero"
         );
         require(
             _maxRecipients > 0,
-            "KalaMangWashingController : Max recipients must be greater than zero"
+            "KalamangController : Max recipients must be greater than zero"
         );
 
         string memory kalamangId = generateRandomString(64);
@@ -216,8 +212,8 @@ contract KalaMangWashingController {
         address[] memory _whitelistArr;
         (_whitelistArr) = abi.decode(_whitelist, (address[]));
 
-        IKalaMangWashingStorage.KalaMangConfig
-            memory kalamangConfig = IKalaMangWashingStorage.KalaMangConfig(
+        IKalamangStorage.KalamangConfig memory kalamangConfig = IKalamangStorage
+            .KalamangConfig(
                 kalamangId,
                 _bitkubNext,
                 _tokenAddress,
@@ -232,7 +228,7 @@ contract KalaMangWashingController {
                 true
             );
 
-        kalaMangWashingStorage.createKalamang(kalamangConfig);
+        kalamangStorage.createKalamang(kalamangConfig);
 
         emit KalamangCreated(
             kalamangId,
@@ -245,7 +241,7 @@ contract KalaMangWashingController {
     function claimToken(string calldata _kalamangId) external {
         uint256 claimAmount = getAmountToClaim(_kalamangId, msg.sender);
 
-        uint256 amount = kalaMangWashingStorage.claimToken(
+        uint256 amount = kalamangStorage.claimToken(
             _kalamangId,
             claimAmount,
             msg.sender
@@ -260,7 +256,7 @@ contract KalaMangWashingController {
     ) external onlySdkCallHelperRouter {
         uint256 claimAmount = getAmountToClaim(_kalamangId, _bitkubNext);
 
-        uint256 amount = kalaMangWashingStorage.claimToken(
+        uint256 amount = kalamangStorage.claimToken(
             _kalamangId,
             claimAmount,
             _bitkubNext
@@ -274,7 +270,7 @@ contract KalaMangWashingController {
         bool _isRequireWhitelist,
         address[] calldata _whitelist
     ) external {
-        kalaMangWashingStorage.updateWhitelist(
+        kalamangStorage.updateWhitelist(
             _kalamangId,
             _isRequireWhitelist,
             _whitelist,
@@ -291,7 +287,7 @@ contract KalaMangWashingController {
         address[] memory _whitelistArr;
         (_whitelistArr) = abi.decode(_whitelist, (address[]));
 
-        kalaMangWashingStorage.updateWhitelist(
+        kalamangStorage.updateWhitelist(
             _kalamangId,
             _isRequireWhitelist,
             _whitelistArr,
@@ -303,11 +299,7 @@ contract KalaMangWashingController {
         string calldata _kalamangId,
         address[] calldata _whitelist
     ) external {
-        kalaMangWashingStorage.addWhitelist(
-            _kalamangId,
-            _whitelist,
-            msg.sender
-        );
+        kalamangStorage.addWhitelist(_kalamangId, _whitelist, msg.sender);
     }
 
     function addWhitelistBySdk(
@@ -318,22 +310,14 @@ contract KalaMangWashingController {
         address[] memory _whitelistArr;
         (_whitelistArr) = abi.decode(_whitelist, (address[]));
 
-        kalaMangWashingStorage.addWhitelist(
-            _kalamangId,
-            _whitelistArr,
-            _bitkubNext
-        );
+        kalamangStorage.addWhitelist(_kalamangId, _whitelistArr, _bitkubNext);
     }
 
     function removeWhitelist(
         string calldata _kalamangId,
         address[] calldata _whitelist
     ) external {
-        kalaMangWashingStorage.removeWhitelist(
-            _kalamangId,
-            _whitelist,
-            msg.sender
-        );
+        kalamangStorage.removeWhitelist(_kalamangId, _whitelist, msg.sender);
     }
 
     function removeWhitelistBySdk(
@@ -344,7 +328,7 @@ contract KalaMangWashingController {
         address[] memory _whitelistArr;
         (_whitelistArr) = abi.decode(_whitelist, (address[]));
 
-        kalaMangWashingStorage.removeWhitelist(
+        kalamangStorage.removeWhitelist(
             _kalamangId,
             _whitelistArr,
             _bitkubNext
@@ -352,10 +336,7 @@ contract KalaMangWashingController {
     }
 
     function abortKalamang(string calldata _kalamangId) external {
-        uint256 amount = kalaMangWashingStorage.abortKalamang(
-            _kalamangId,
-            msg.sender
-        );
+        uint256 amount = kalamangStorage.abortKalamang(_kalamangId, msg.sender);
         emit KalamangAborted(_kalamangId, amount);
     }
 
@@ -363,7 +344,7 @@ contract KalaMangWashingController {
         string calldata _kalamangId,
         address _bitkubNext
     ) external onlySdkCallHelperRouter {
-        uint256 amount = kalaMangWashingStorage.abortKalamang(
+        uint256 amount = kalamangStorage.abortKalamang(
             _kalamangId,
             _bitkubNext
         );
@@ -380,11 +361,7 @@ contract KalaMangWashingController {
         sdkCallHelperRouter = _sdkCallHelperRouter;
     }
 
-    function setKalaMangWashingStorage(
-        address _kalaMangWashingStorage
-    ) external onlyOwner {
-        kalaMangWashingStorage = IKalaMangWashingStorage(
-            _kalaMangWashingStorage
-        );
+    function setkalamangStorage(address _kalamangStorage) external onlyOwner {
+        kalamangStorage = IKalamangStorage(_kalamangStorage);
     }
 }
