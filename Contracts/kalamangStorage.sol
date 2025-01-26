@@ -92,11 +92,12 @@ contract KalamangStorage is IKalamangStorage {
         newKalamang.claimedTokens = 0;
         newKalamang.maxRecipients = _config.maxRecipients;
         newKalamang.claimedRecipients = 0;
-        newKalamang.isactive = true;
+        newKalamang.isActive = true;
         newKalamang.isRandom = _config.isRandom;
         newKalamang.minRandom = _config.minRandom;
         newKalamang.maxRandom = _config.maxRandom;
         newKalamang.acceptedKYCLevel = _config.acceptedKYCLevel;
+        newKalamang.isClaimable = _config.isClaimable;
         newKalamang.isRequireWhitelist = _config.isRequireWhitelist;
         newKalamang.whitelistArray = _config.whitelist;
         for (uint i = 0; i < _config.whitelist.length; i++) {
@@ -137,7 +138,7 @@ contract KalamangStorage is IKalamangStorage {
             kalamang.creator != address(0),
             "KalamangStorage : Kalamang does not exist"
         );
-        require(kalamang.isactive, "KalamangStorage : Kalamang is not active");
+        require(kalamang.isActive, "KalamangStorage : Kalamang is not active");
         require(
             !kalamang.hasClaimed[_recipient],
             "KalamangStorage : Already claimed"
@@ -200,7 +201,7 @@ contract KalamangStorage is IKalamangStorage {
             kalamang.creator == _creator,
             "KalamangStorage : Invalid creator"
         );
-        require(kalamang.isactive == true, "KalamangStorage : Already aborted");
+        require(kalamang.isActive == true, "KalamangStorage : Already aborted");
 
         IKAP20 _token = IKAP20(kalamang.tokenAddress);
 
@@ -208,10 +209,10 @@ contract KalamangStorage is IKalamangStorage {
 
         require(
             _token.transfer(kalamang.creator, _amount),
-            "Token transfer failed"
+            "KalamangStorage : Token transfer failed"
         );
 
-        kalamang.isactive = false;
+        kalamang.isActive = false;
 
         return _amount;
     }
@@ -221,7 +222,7 @@ contract KalamangStorage is IKalamangStorage {
             Kalamang storage kalamang = kalamangs[i];
 
             if (
-                !kalamang.isactive ||
+                !kalamang.isActive ||
                 kalamang.maxRecipients == kalamang.claimedRecipients
             ) {
                 continue;
@@ -236,15 +237,33 @@ contract KalamangStorage is IKalamangStorage {
                 "KalamangStorage : Token transfer failed"
             );
 
-            kalamang.isactive = false;
+            kalamang.isActive = false;
         }
+    }
+
+    function unlockKalamang(
+        string calldata _kalamangId,
+        address _creator
+    ) external override ownerOrKalamangController {
+        Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
+        require(
+            kalamang.creator != address(0),
+            "KalamangStorage : Kalamang does not exist"
+        );
+        require(
+            kalamang.creator == _creator,
+            "KalamangStorage : Invalid creator"
+        );
+        require(kalamang.isActive, "KalamangStorage : Kalamang is aborted");
+        require(!kalamang.isClaimable, "KalamangStorage : Already unlocked");
+
+        kalamang.isClaimable = true;
     }
 
     function getKalamangInfo(
         string calldata _kalamangId
     ) public view virtual returns (KalamangInfo memory) {
-        uint256 _id = kalamangIds[_kalamangId];
-        Kalamang storage kalamang = kalamangs[_id];
+        Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
         require(
             kalamang.creator != address(0),
             "KalamangStorage : Kalamang does not exist"
@@ -260,12 +279,13 @@ contract KalamangStorage is IKalamangStorage {
         info.maxRecipients = kalamang.maxRecipients;
         info.totalTokens = kalamang.totalTokens;
         info.claimedRecipients = kalamang.claimedRecipients;
-        info.isactive = kalamang.isactive;
+        info.isActive = kalamang.isActive;
         info.isRandom = kalamang.isRandom;
         info.minRandom = kalamang.minRandom;
         info.maxRandom = kalamang.maxRandom;
         info.isRequireWhitelist = kalamang.isRequireWhitelist;
         info.acceptedKYCLevel = kalamang.acceptedKYCLevel;
+        info.isClaimable = kalamang.isClaimable;
         info.remainingAmounts = kalamang.totalTokens - kalamang.claimedTokens;
 
         return info;
@@ -339,6 +359,13 @@ contract KalamangStorage is IKalamangStorage {
         return kalamang.creator != address(0) && kalamang.whitelist[_target];
     }
 
+    function isClaimable(
+        string calldata _kalamangId
+    ) public view virtual returns (bool) {
+        Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
+        return kalamang.creator != address(0) && kalamang.isClaimable;
+    }
+
     function isClaimed(
         string calldata _kalamangId,
         address _target
@@ -364,7 +391,7 @@ contract KalamangStorage is IKalamangStorage {
             kalamang.creator == _creator,
             "KalamangStorage : Invalid creator"
         );
-        require(kalamang.isactive, "KalamangStorage : Kalamang is not active");
+        require(kalamang.isActive, "KalamangStorage : Kalamang is not active");
 
         kalamang.isRequireWhitelist = _isRequireWhitelist;
 
@@ -389,7 +416,7 @@ contract KalamangStorage is IKalamangStorage {
             kalamang.creator == _creator,
             "KalamangStorage : Invalid creator"
         );
-        require(kalamang.isactive, "KalamangStorage : Kalamang is not active");
+        require(kalamang.isActive, "KalamangStorage : Kalamang is not active");
 
         for (uint i = 0; i < _whitelist.length; i++) {
             if (kalamang.whitelist[_whitelist[i]]) {
@@ -411,7 +438,7 @@ contract KalamangStorage is IKalamangStorage {
             kalamang.creator == _creator,
             "KalamangStorage : Invalid creator"
         );
-        require(kalamang.isactive, "KalamangStorage : Kalamang is not active");
+        require(kalamang.isActive, "KalamangStorage : Kalamang is not active");
 
         for (uint i = 0; i < _whitelist.length; i++) {
             if (!kalamang.whitelist[_whitelist[i]]) {

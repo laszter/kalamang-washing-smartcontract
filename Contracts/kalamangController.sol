@@ -54,6 +54,7 @@ contract KalamangController {
         uint256 amount
     );
     event KalamangAborted(string kalamangId, uint256 returnAmount);
+    event KalamangUnlocked(string kalamangId);
 
     // Function to generate a random string
     function generateRandomString(
@@ -88,7 +89,7 @@ contract KalamangController {
         IKalamangStorage.KalamangInfo memory kalamangInfo = kalamangStorage
             .getKalamangInfo(_kalamangId);
 
-        if (!kalamangInfo.isactive) {
+        if (!kalamangInfo.isActive) {
             return 0;
         }
 
@@ -145,9 +146,10 @@ contract KalamangController {
         bool _isRandom,
         uint256 _minRandom,
         uint256 _maxRandom,
-        bool _isRequireWhitelist,
         uint256 _acceptedKYCLevel,
-        address[] calldata _whitelist
+        bool _isRequireWhitelist,
+        address[] calldata _whitelist,
+        bool _isClaimable
     ) external whenNotPaused {
         require(
             _totalTokens > 0,
@@ -171,6 +173,7 @@ contract KalamangController {
                 _minRandom,
                 _maxRandom,
                 _acceptedKYCLevel,
+                _isClaimable,
                 _isRequireWhitelist,
                 _whitelist,
                 false
@@ -193,9 +196,10 @@ contract KalamangController {
         bool _isRandom,
         uint256 _minRandom,
         uint256 _maxRandom,
-        bool _isRequireWhitelist,
         uint256 _acceptedKYCLevel,
+        bool _isRequireWhitelist,
         bytes memory _whitelist,
+        bool _isClaimable,
         address _bitkubNext
     ) external onlySdkCallHelperRouter whenNotPaused {
         require(
@@ -223,6 +227,7 @@ contract KalamangController {
                 _minRandom,
                 _maxRandom,
                 _acceptedKYCLevel,
+                _isClaimable,
                 _isRequireWhitelist,
                 _whitelistArr,
                 true
@@ -349,6 +354,19 @@ contract KalamangController {
             _bitkubNext
         );
         emit KalamangAborted(_kalamangId, amount);
+    }
+
+    function unlockKalamang(string calldata _kalamangId) external {
+        kalamangStorage.unlockKalamang(_kalamangId, msg.sender);
+        emit KalamangUnlocked(_kalamangId);
+    }
+
+    function unlockKalamangBySdk(
+        string calldata _kalamangId,
+        address _bitkubNext
+    ) external onlySdkCallHelperRouter {
+        kalamangStorage.unlockKalamang(_kalamangId, _bitkubNext);
+        emit KalamangUnlocked(_kalamangId);
     }
 
     function setPause(bool _isPaused) external onlyOwner {

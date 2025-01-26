@@ -15,11 +15,12 @@ interface IKalamangStorage {
         uint256 minRandom;
         uint256 maxRandom;
         uint256 acceptedKYCLevel;
+        bool isClaimable;
         mapping(address => bool) hasClaimed;
         bool isRequireWhitelist;
         mapping(address => bool) whitelist;
         address[] whitelistArray;
-        bool isactive;
+        bool isActive;
     }
 
     struct KalamangInfo {
@@ -32,11 +33,12 @@ interface IKalamangStorage {
         bool isRandom;
         uint256 minRandom;
         uint256 maxRandom;
-        bool isRequireWhitelist;
         uint256 acceptedKYCLevel;
+        bool isRequireWhitelist;
+        bool isClaimable;
         uint256 totalTokens;
         uint256 remainingAmounts;
-        bool isactive;
+        bool isActive;
     }
 
     struct KalamangClaimedHistory {
@@ -54,6 +56,7 @@ interface IKalamangStorage {
         uint256 minRandom;
         uint256 maxRandom;
         uint256 acceptedKYCLevel;
+        bool isClaimable;
         bool isRequireWhitelist;
         address[] whitelist;
         bool isSdkCallerHelper;
@@ -71,6 +74,11 @@ interface IKalamangStorage {
         string calldata _kalamangId,
         address _creator
     ) external returns (uint256);
+
+    function unlockKalamang(
+        string calldata _kalamangId,
+        address _creator
+    ) external;
 
     function getKalamangInfo(
         string calldata _kalamangId
