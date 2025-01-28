@@ -30,20 +30,20 @@ async function main() {
     await storageContract.waitForDeployment();
     await controllerContract.waitForDeployment();
 
+    // const storageContract = KalamangStorage.attach("0x68D8563Bfd2ebcDfB164Be94327cB6aEE3b16616");
+    // const tx = await storageContract.setFeeStorage("0x99E0e6E1FD00B59746caaF84521d9c8B9e617334");
+    // await tx.wait();
+    // console.log("KalamangFeeStorage address set in KalamangStorage");
+
     // Call setKalaMangController in KalamangStorage to set the address of KalamangControllerTestV2
-    const tx = await storageContract.setKalaMangController(controllerContract.target);
+    const tx = await storageContract.setKalamangController(controllerContract.target);
     await tx.wait();
     console.log("KalamangController address set in KalamangStorage");
 
-    // const storageContract = KalamangStorage.attach("0x314600B9D6e5F79a9BeaA92395b34CEBaa4593d0");
 
     const tx2 = await storageContract.setAllowTokenAddress(kkubAddress, true);
     await tx2.wait();
     console.log("KKUB address set allow in KalamangStorage");
-
-    const tx3 = await storageContract.setAllowTokenAddress("0x24B271FA748504241b20473249fcA14983C76D7d", true);
-    await tx3.wait();
-    console.log("KK address set allow in KalamangStorage");
 }
 
 main()
