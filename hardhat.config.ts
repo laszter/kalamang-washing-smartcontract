@@ -1,7 +1,6 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 
-const endpointUrl = "https://rpc-testnet.bitkubchain.io";
 const privateKey = "";
 
 const config: HardhatUserConfig = {
@@ -16,8 +15,13 @@ const config: HardhatUserConfig = {
   },
   networks: {
     bkctestnet: {
-      url: endpointUrl,
+      url: "https://rpc-testnet.bitkubchain.io",
       chainId: 25925,
+      accounts: [privateKey],
+    },
+    bkcmainnet: {
+      url: "https://rpc.bitkubchain.io",
+      chainId: 96,
       accounts: [privateKey],
     },
   },
