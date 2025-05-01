@@ -9,6 +9,10 @@ contract TheOasis {
     uint256 public waitingTime;
     uint256 public waterAmount;
 
+    event OwnerChanged(address indexed newOwner);
+    event WaitingTimeUpdated(uint256 newTime);
+    event WaterAmountUpdated(uint256 newAmount);
+
     constructor() {
         owner = msg.sender;
         waitingTime = 14 days;
@@ -18,11 +22,6 @@ contract TheOasis {
     modifier onlyOwner() {
         require(msg.sender == owner, "Not the contract owner");
         _;
-    }
-
-    function setOwner(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "Invalid address");
-        owner = newOwner;
     }
 
     receive() external payable {
@@ -44,10 +43,10 @@ contract TheOasis {
         uint256 sendAmount = waterAmount > balance ? balance : waterAmount;
         require(sendAmount > 0, "No water available to send");
 
+        lastCalled[recipient] = block.timestamp;
+
         (bool success, ) = recipient.call{value: sendAmount}("");
         require(success, "Failed to send drink water");
-
-        lastCalled[recipient] = block.timestamp;
     }
 
     function nextAvailableCallTime(
@@ -61,13 +60,21 @@ contract TheOasis {
         return lastTime + waitingTime;
     }
 
+    function setOwner(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        owner = newOwner;
+        emit OwnerChanged(newOwner);
+    }
+
     function setWaitingTime(uint256 _newWaitingTime) external onlyOwner {
         require(_newWaitingTime > 0, "Time must be greater than 0");
         waitingTime = _newWaitingTime;
+        emit WaitingTimeUpdated(_newWaitingTime);
     }
 
     function setWaterAmount(uint256 _newWaterAmount) external onlyOwner {
         require(_newWaterAmount > 0, "Amount must be greater than 0");
         waterAmount = _newWaterAmount;
+        emit WaterAmountUpdated(_newWaterAmount);
     }
 }
