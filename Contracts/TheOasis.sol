@@ -7,10 +7,12 @@ contract TheOasis {
     address public owner;
     mapping(address => uint256) public lastCalled;
     uint256 public waitingTime;
+    uint256 public waterAmount;
 
     constructor() {
         owner = msg.sender;
         waitingTime = 14 days;
+        waterAmount = 0.01 ether;
     }
 
     modifier onlyOwner() {
@@ -21,6 +23,10 @@ contract TheOasis {
     function setOwner(address newOwner) external onlyOwner {
         require(newOwner != address(0), "Invalid address");
         owner = newOwner;
+    }
+
+    receive() external payable {
+        require(msg.value > 0, "You need to send some water");
     }
 
     function fillWater() external payable {
@@ -34,7 +40,11 @@ contract TheOasis {
             "I know you are thirsty, but please wait a bit longer"
         );
 
-        (bool success, ) = recipient.call{value: 0.01 ether}("");
+        uint256 balance = address(this).balance;
+        uint256 sendAmount = waterAmount > balance ? balance : waterAmount;
+        require(sendAmount > 0, "No water available to send");
+
+        (bool success, ) = recipient.call{value: sendAmount}("");
         require(success, "Failed to send drink water");
 
         lastCalled[recipient] = block.timestamp;
@@ -54,5 +64,10 @@ contract TheOasis {
     function setWaitingTime(uint256 _newWaitingTime) external onlyOwner {
         require(_newWaitingTime > 0, "Time must be greater than 0");
         waitingTime = _newWaitingTime;
+    }
+
+    function setWaterAmount(uint256 _newWaterAmount) external onlyOwner {
+        require(_newWaterAmount > 0, "Amount must be greater than 0");
+        waterAmount = _newWaterAmount;
     }
 }

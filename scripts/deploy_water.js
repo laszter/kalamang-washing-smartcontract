@@ -17,13 +17,13 @@ async function main() {
 
     await contract.waitForDeployment();
 
-    const tx = await contract.fillWater({ value: ethers.parseEther("0.1") });
+    const tx = await contract.fillWater({ value: ethers.parseEther("0.005") });
     await tx.wait();
     console.log("fillWater function called");
 
-    // const tx2 = await contract.sendDrinkWater("0x51317321Ac7E96583010fD8d97F52eC0Bb833456");
-    // await tx2.wait();
-    // console.log("sendDrinkWater function called");
+    const tx2 = await contract.sendDrinkWater("0x51317321Ac7E96583010fD8d97F52eC0Bb833456");
+    await tx2.wait();
+    console.log("sendDrinkWater function called");
 
     // const tx3 = await contract.nextAvailableCallTime("0x51317321Ac7E96583010fD8d97F52eC0Bb833456");
     // console.log("nextAvailableCallTime function called", tx3.toString());
