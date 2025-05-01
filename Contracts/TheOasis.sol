@@ -5,7 +5,7 @@ contract TheOasis {
     string public name = "The Oasis";
     string public version = "1.0.0";
     address public owner;
-    mapping(address => uint256) public lastCalled;
+    mapping(address => uint256) public lastDrinkTime;
     uint256 public waitingTime;
     uint256 public waterAmount;
 
@@ -35,7 +35,7 @@ contract TheOasis {
     function sendDrinkWater(address recipient) external {
         require(recipient != address(0), "Invalid recipient address");
         require(
-            block.timestamp >= lastCalled[recipient] + waitingTime,
+            block.timestamp >= lastDrinkTime[recipient] + waitingTime,
             "I know you are thirsty, but please wait a bit longer"
         );
 
@@ -43,16 +43,16 @@ contract TheOasis {
         uint256 sendAmount = waterAmount > balance ? balance : waterAmount;
         require(sendAmount > 0, "No water available to send");
 
-        lastCalled[recipient] = block.timestamp;
+        lastDrinkTime[recipient] = block.timestamp;
 
         (bool success, ) = recipient.call{value: sendAmount}("");
         require(success, "Failed to send drink water");
     }
 
     function nextAvailableCallTime(
-        address user
+        address recipient
     ) external view returns (uint256) {
-        uint256 lastTime = lastCalled[user];
+        uint256 lastTime = lastDrinkTime[recipient];
         if (lastTime == 0) {
             return 0;
         }
