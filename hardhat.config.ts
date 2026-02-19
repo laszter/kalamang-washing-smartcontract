@@ -1,8 +1,9 @@
-import type { HardhatUserConfig } from "hardhat/config";
+import { defineConfig } from "hardhat/config";
 import { configVariable } from "hardhat/config";
-import "@nomicfoundation/hardhat-toolbox-mocha-ethers";
+import HardhatToolboxMochaEthers from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
 
-const config: HardhatUserConfig = {
+export default defineConfig({
+  plugins: [HardhatToolboxMochaEthers],
   solidity: {
     profiles: {
       default: {
@@ -30,6 +31,4 @@ const config: HardhatUserConfig = {
       accounts: [configVariable("DEPLOYER_PRIVATE_KEY")],
     },
   },
-};
-
-export default config;
+});
