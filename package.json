@@ -11,10 +11,11 @@
   "author": "",
   "license": "ISC",
   "overrides": {
+    "lodash-es": "^4.17.23",
     "serialize-javascript": "^7.0.4"
   },
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-ethers": "^4.0.0",
     "@types/node": "^25.3.0",
     "hardhat": "^3.0.0"
   }
