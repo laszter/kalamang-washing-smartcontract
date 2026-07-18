@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import hardhat from "hardhat";
 
 /**
@@ -56,6 +58,25 @@ const INFRA: Record<
   },
 };
 
+/**
+ * Returns the block number in which a freshly deployed contract's creation
+ * transaction was mined. Throws if the contract was attached (not deployed),
+ * since an attached instance has no deployment transaction to look up.
+ */
+async function deployBlockOf(
+  contract: { deploymentTransaction: () => { wait: () => Promise<{ blockNumber: number } | null> } | null }
+): Promise<number> {
+  const tx = contract.deploymentTransaction();
+  if (!tx) {
+    throw new Error("Contract has no deployment transaction (was it attached?)");
+  }
+  const receipt = await tx.wait();
+  if (!receipt) {
+    throw new Error("Deployment transaction receipt is null");
+  }
+  return receipt.blockNumber;
+}
+
 async function main() {
   const networkName = process.env.NETWORK ?? "bkctestnet";
   const connection = await hardhat.network.create(networkName);
@@ -103,6 +124,9 @@ async function main() {
   const KalamangFeeStorage =
     await ethers.getContractFactory("KalamangFeeStorage");
   let feeContract: InstanceType<typeof ethers.Contract>;
+  // null when the fee storage is reused (attached), since an attached instance
+  // has no creation block.
+  let feeStorageDeployBlock: number | null = null;
   const existingFeeStorage: string = "0xe1C8FaD37e6CdeF517Ddf0D7a6EeFf3f6D278e03";
   if (existingFeeStorage) {
     if (!ethers.isAddress(existingFeeStorage) || existingFeeStorage === ZERO) {
@@ -115,7 +139,12 @@ async function main() {
     feeContract = (await KalamangFeeStorage.deploy()) as unknown as
       InstanceType<typeof ethers.Contract>;
     await feeContract.waitForDeployment();
-    console.log("KalamangFeeStorage : (newly deployed)", feeContract.target);
+    feeStorageDeployBlock = await deployBlockOf(feeContract);
+    console.log(
+      "KalamangFeeStorage : (newly deployed)",
+      feeContract.target,
+      `(block ${feeStorageDeployBlock})`
+    );
   }
 
   // 2. Storage. Controller is wired in afterwards (circular dependency), so it
@@ -129,7 +158,12 @@ async function main() {
     sdkTransferRouterAddress
   )) as unknown as InstanceType<typeof ethers.Contract>;
   await storageContract.waitForDeployment();
-  console.log("KalamangStorageV2  :", storageContract.target);
+  const storageDeployBlock = await deployBlockOf(storageContract);
+  console.log(
+    "KalamangStorageV2  :",
+    storageContract.target,
+    `(block ${storageDeployBlock})`
+  );
 
   // 3. Controller (KalamangV2).
   const KalamangV2 = await ethers.getContractFactory("KalamangV2");
@@ -138,7 +172,12 @@ async function main() {
     storageContract.target
   )) as unknown as InstanceType<typeof ethers.Contract>;
   await controllerContract.waitForDeployment();
-  console.log("KalamangV2         :", controllerContract.target);
+  const controllerDeployBlock = await deployBlockOf(controllerContract);
+  console.log(
+    "KalamangV2         :",
+    controllerContract.target,
+    `(block ${controllerDeployBlock})`
+  );
 
   // 4. Wire the controller into the storage.
   await (
@@ -191,10 +230,41 @@ async function main() {
     console.log(`-> controller.setClaimIssuer(${claimIssuer}) done`);
   }
 
+  // kalamangV2DeployBlock: the earliest block where any newly deployed V2
+  // contract exists. The controller emits the history events the web app scans
+  // (KalamangCreated / TokenClaimed / KalamangAborted / KalamangUnlocked) and
+  // the storage emits the per-kalamang config events (fee / gasless / voucher).
+  // The storage is deployed first, so its block is <= the controller's; using
+  // the minimum guarantees the web history scan starts early enough to catch
+  // events from both without over-scanning. Set this as kalamangV2DeployBlock in
+  // the web config so the scan neither misses events nor crawls from genesis.
+  const kalamangV2DeployBlock = Math.min(storageDeployBlock, controllerDeployBlock);
+
+  const deployment = {
+    network: networkName,
+    deployer: deployer.address,
+    feeStorage: String(feeContract.target),
+    feeStorageDeployBlock,
+    storageV2: String(storageContract.target),
+    storageDeployBlock,
+    kalamangV2: String(controllerContract.target),
+    controllerDeployBlock,
+    // The value to paste into the web config.
+    kalamangV2DeployBlock,
+  };
+
+  const outPath = resolve(process.cwd(), "deployments", `${networkName}.json`);
+  mkdirSync(dirname(outPath), { recursive: true });
+  writeFileSync(outPath, `${JSON.stringify(deployment, null, 2)}\n`);
+
   console.log("\nDeployment complete:");
   console.log(`  KalamangFeeStorage : ${feeContract.target}`);
   console.log(`  KalamangStorageV2  : ${storageContract.target}`);
   console.log(`  KalamangV2         : ${controllerContract.target}`);
+  console.log("\nWeb config:");
+  console.log(`  kalamangV2DeployBlock = ${kalamangV2DeployBlock}`);
+  console.log(`  (storage @ ${storageDeployBlock}, controller @ ${controllerDeployBlock})`);
+  console.log(`\nDeployment record written to ${outPath}`);
 }
 
 main().catch((error) => {

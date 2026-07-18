@@ -3,24 +3,14 @@
 pragma solidity ^0.8.0;
 
 interface IKalamangStorageV2 {
+    // Field order is chosen for storage packing: `creator` (20 bytes) shares
+    // slot 0 with all six bool flags (1 byte each), so a fresh createKalamang
+    // writes them in one SSTORE and a claim reads them alongside `creator`.
     struct Kalamang {
         address creator;
-        string kalamangId;
-        address tokenAddress;
-        uint256 totalTokens;
-        uint256 claimedTokens;
-        uint256 maxRecipients;
-        uint256 claimedRecipients;
         bool isRandom;
-        uint256 minRandom;
-        uint256 maxRandom;
-        uint256 acceptedKYCLevel;
         bool isClaimable;
-        uint256 fee;
-        mapping(address => bool) hasClaimed;
         bool isRequireWhitelist;
-        mapping(address => bool) whitelist;
-        address[] whitelistArray;
         bool isActive;
         // V2: when true, this kalamang can be claimed gaslessly (the platform
         // relayer pays the gas via claimTokenBySig). Set per-kalamang by the
@@ -31,6 +21,19 @@ interface IKalamangStorageV2 {
         // .claimTokenWithVoucher). Set per-kalamang by the owner; defaults to
         // false so open kalamangs are unaffected.
         bool requireVoucher;
+        string kalamangId;
+        address tokenAddress;
+        uint256 totalTokens;
+        uint256 claimedTokens;
+        uint256 maxRecipients;
+        uint256 claimedRecipients;
+        uint256 minRandom;
+        uint256 maxRandom;
+        uint256 acceptedKYCLevel;
+        uint256 fee;
+        mapping(address => bool) hasClaimed;
+        mapping(address => bool) whitelist;
+        address[] whitelistArray;
     }
 
     struct KalamangInfo {
@@ -54,11 +57,6 @@ interface IKalamangStorageV2 {
         bool requireVoucher;
     }
 
-    struct KalamangClaimedHistory {
-        address claimedAddress;
-        uint claimedAmount;
-    }
-
     struct KalamangConfig {
         string kalamangId;
         address creator;
@@ -78,10 +76,14 @@ interface IKalamangStorageV2 {
 
     function createKalamang(KalamangConfig calldata _config) external;
 
+    // V2 (gas): the controller passes only (kalamangId, recipient, enforceGate);
+    // storage computes the claim amount from its own struct read and returns the
+    // net (post-fee) amount paid. `_enforceVoucherGate` is true only on the
+    // direct EOA claimToken path (bySig / withVoucher / bySdk pass false).
     function claimToken(
         string calldata _kalamangId,
-        uint256 _claimTokens,
-        address _recipient
+        address _recipient,
+        bool _enforceVoucherGate
     ) external returns (uint256);
 
     function abortKalamang(

@@ -11,49 +11,68 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
     // Readable version identifier of this contract.
     uint256 public constant VERSION = 2;
 
+    // Custom errors (cheaper than require-strings: smaller bytecode + cheaper
+    // revert path). One error per distinct old message, so the frontend can map
+    // each 4-byte selector back to a specific user-facing message.
+    error NotOwner();
+    error NotController();
+    error NotOwnerOrController();
+    error Paused();
+    error TokenNotAllowed();
+    error KalamangExists();
+    error KalamangNotFound();
+    error TokenTransferFailed();
+    error KalamangNotActive();
+    error VoucherRequired();
+    error AlreadyClaimed();
+    error AllClaimed();
+    error NotWhitelisted();
+    error KycTooLow();
+    error FeeTransferFailed();
+    error TransferFailed();
+    error InvalidCreator();
+    error AlreadyAborted();
+    error KalamangAborted();
+    error AlreadyUnlocked();
+    error FeeTooHigh();
+
     modifier onlyOwner() {
-        require(
-            msg.sender == owner,
-            "KalamangStorage : Only owner can call this function"
-        );
+        if (msg.sender != owner) revert NotOwner();
         _;
     }
 
     modifier onlyKalamangController() {
-        require(
-            msg.sender == kalamangController,
-            "KalamangStorage : Only kalamangController can call this function"
-        );
+        if (msg.sender != kalamangController) revert NotController();
         _;
     }
 
     modifier ownerOrKalamangController() {
-        require(
-            msg.sender == owner || msg.sender == kalamangController,
-            "KalamangStorage : Only owner or kalamangController can call this function"
-        );
+        if (msg.sender != owner && msg.sender != kalamangController) {
+            revert NotOwnerOrController();
+        }
         _;
     }
 
     modifier whenNotPaused() {
-        require(!isPaused, "KalamangStorage : Contract is paused");
+        if (isPaused) revert Paused();
         _;
     }
 
+    // Packed: `owner` (20 bytes) + `isPaused` + `isAllowAllTokens` (1 byte each)
+    // share slot 0, so the pause/allow flags are read warm during create/claim.
     address public owner;
+    bool public isPaused;
+    bool public isAllowAllTokens;
     address public kalamangController;
     uint256 public totalKalaMangs;
     IKYCBitkubChain public kycBitkubChain;
     ISdkTransferRouter public sdkTransferRouter;
-    bool public isPaused;
     IKalamangFeeStorage public feeStorage;
-    bool public isAllowAllTokens;
 
     mapping(string => uint256) private kalamangIds;
     mapping(uint256 => Kalamang) private kalamangs;
     mapping(string => bool) private kalamangsExists;
     mapping(address => uint256[]) private kalamangsOwner;
-    mapping(uint256 => KalamangClaimedHistory[]) private claimedHistory;
 
     mapping(address => bool) allowTokenAddress;
 
@@ -79,26 +98,22 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
     function createKalamang(
         KalamangConfig calldata _config
     ) external override whenNotPaused onlyKalamangController {
-        require(
-            allowTokenAddress[_config.tokenAddress] || isAllowAllTokens,
-            "KalamangStorage : Token not allowed"
-        );
-        require(
-            !kalamangsExists[_config.kalamangId],
-            "KalamangStorage : Kalamang exists"
-        );
+        if (!allowTokenAddress[_config.tokenAddress] && !isAllowAllTokens) {
+            revert TokenNotAllowed();
+        }
+        if (kalamangsExists[_config.kalamangId]) revert KalamangExists();
 
         kalamangsExists[_config.kalamangId] = true;
         kalamangIds[_config.kalamangId] = totalKalaMangs;
 
         Kalamang storage newKalamang = kalamangs[totalKalaMangs];
+        // A fresh struct slot is already zero, so claimedTokens/claimedRecipients
+        // are left unset (writing 0 to a fresh slot would just waste gas).
         newKalamang.creator = _config.creator;
         newKalamang.kalamangId = _config.kalamangId;
         newKalamang.tokenAddress = _config.tokenAddress;
         newKalamang.totalTokens = _config.totalTokens;
-        newKalamang.claimedTokens = 0;
         newKalamang.maxRecipients = _config.maxRecipients;
-        newKalamang.claimedRecipients = 0;
         newKalamang.isActive = true;
         newKalamang.isRandom = _config.isRandom;
         newKalamang.minRandom = _config.minRandom;
@@ -114,8 +129,14 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         newKalamang.fee = feeStorage.getFee();
         newKalamang.isRequireWhitelist = _config.isRequireWhitelist;
         newKalamang.whitelistArray = _config.whitelist;
-        for (uint i = 0; i < _config.whitelist.length; i++) {
-            newKalamang.whitelist[_config.whitelist[i]] = true;
+
+        address[] calldata _wl = _config.whitelist;
+        uint256 _wlLen = _wl.length;
+        for (uint256 i = 0; i < _wlLen; ) {
+            newKalamang.whitelist[_wl[i]] = true;
+            unchecked {
+                ++i;
+            }
         }
 
         kalamangsOwner[_config.creator].push(totalKalaMangs);
@@ -131,76 +152,136 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
             );
         } else {
             IKAP20 _token = IKAP20(_config.tokenAddress);
-            require(
-                _token.transferFrom(
+            if (
+                !_token.transferFrom(
                     _config.creator,
                     address(this),
                     _config.totalTokens
-                ),
-                "KalamangStorage : Token transfer failed"
-            );
+                )
+            ) {
+                revert TokenTransferFailed();
+            }
         }
     }
 
+    // V2 (gas): the controller passes only (kalamangId, recipient, enforceGate)
+    // and this single call validates, computes the amount, updates state and
+    // transfers — folding what used to be three separate storage round-trips
+    // (isVoucherRequired + getKalamangInfo + claimToken) into one. The claim
+    // amount is derived from the pre-increment state below.
     function claimToken(
         string calldata _kalamangId,
-        uint256 _claimTokens,
-        address _recipient
+        address _recipient,
+        bool _enforceVoucherGate
     ) external override onlyKalamangController returns (uint256) {
         Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
-        require(
-            kalamang.creator != address(0),
-            "KalamangStorage : Kalamang does not exist"
-        );
-        require(kalamang.isActive, "KalamangStorage : Kalamang is not active");
-        require(
-            !kalamang.hasClaimed[_recipient],
-            "KalamangStorage : Already claimed"
-        );
-        require(
-            !kalamang.isRequireWhitelist || kalamang.whitelist[_recipient],
-            "KalamangStorage : Address is not in whitelist"
-        );
-        require(
-            kycBitkubChain.kycsLevel(_recipient) >= kalamang.acceptedKYCLevel,
-            "KalamangStorage : KYC level is not accepted"
-        );
-        require(
-            kalamang.claimedRecipients < kalamang.maxRecipients,
-            "KalamangStorage : All tokens have been claimed"
+        if (kalamang.creator == address(0)) revert KalamangNotFound();
+        if (!kalamang.isActive) revert KalamangNotActive();
+        // Anti-Sybil (Layer 3): only the direct EOA claimToken path enforces the
+        // voucher gate. claimTokenBySig / claimTokenWithVoucher / claimTokenBySdk
+        // pass false because they carry their own authorization.
+        if (_enforceVoucherGate && kalamang.requireVoucher) {
+            revert VoucherRequired();
+        }
+        if (kalamang.hasClaimed[_recipient]) revert AlreadyClaimed();
+        if (kalamang.claimedRecipients >= kalamang.maxRecipients) {
+            revert AllClaimed();
+        }
+        if (
+            kalamang.isRequireWhitelist && !kalamang.whitelist[_recipient]
+        ) {
+            revert NotWhitelisted();
+        }
+        // KYC is an external staticcall — checked last so cheaper checks fail
+        // first, and skipped entirely for open (level 0) kalamangs.
+        if (
+            kalamang.acceptedKYCLevel != 0 &&
+            kycBitkubChain.kycsLevel(_recipient) < kalamang.acceptedKYCLevel
+        ) {
+            revert KycTooLow();
+        }
+
+        // Amount is computed from pre-increment counters (mirrors the old
+        // controller getAmountToClaim exactly, same RNG seed).
+        uint256 _claimTokens = _computeClaimAmount(
+            kalamang,
+            _kalamangId,
+            _recipient
         );
 
         IKAP20 _token = IKAP20(kalamang.tokenAddress);
 
         kalamang.hasClaimed[_recipient] = true;
-        kalamang.claimedRecipients++;
-        kalamang.claimedTokens += _claimTokens;
+        // Counters can never exceed the token supply / recipient cap they track.
+        unchecked {
+            kalamang.claimedRecipients++;
+            // Accumulate GROSS (pre-fee) so remainingAmounts tracks the escrow.
+            kalamang.claimedTokens += _claimTokens;
+        }
 
         // V2: use the fee snapshotted on this kalamang instead of the global fee.
         uint256 _fee = kalamang.fee;
 
         if (_fee > 0) {
             uint256 feeAmount = (_claimTokens * _fee) / 10000;
-            require(
-                _token.transfer(address(feeStorage), feeAmount),
-                "KalamangStorage : Transfer fee failed"
-            );
+            if (!_token.transfer(address(feeStorage), feeAmount)) {
+                revert FeeTransferFailed();
+            }
             _claimTokens -= feeAmount;
         }
 
-        claimedHistory[kalamangIds[_kalamangId]].push(
-            KalamangClaimedHistory({
-                claimedAddress: _recipient,
-                claimedAmount: _claimTokens
-            })
-        );
+        if (!_token.transfer(_recipient, _claimTokens)) revert TransferFailed();
 
-        require(
-            _token.transfer(_recipient, _claimTokens),
-            "KalamangStorage : Transfer failed"
-        );
-
+        // Per-claim history now lives in the KalamangV2.TokenClaimed event
+        // (emitted by the controller) instead of an on-chain array.
         return _claimTokens;
+    }
+
+    // V2 (gas): claim-amount math moved here from the controller so it reads the
+    // same struct the claim already loads (no getKalamangInfo round-trip, no
+    // wasted token.symbol() call). Behaviour is identical to the old
+    // getAmountToClaim, using pre-increment claimedRecipients/claimedTokens.
+    function _computeClaimAmount(
+        Kalamang storage kalamang,
+        string calldata _kalamangId,
+        address _recipient
+    ) private view returns (uint256) {
+        uint256 remaining = kalamang.totalTokens - kalamang.claimedTokens;
+        uint256 claimedRecipients = kalamang.claimedRecipients;
+        uint256 maxRecipients = kalamang.maxRecipients;
+
+        // Last recipient sweeps whatever is left.
+        if (claimedRecipients + 1 == maxRecipients) {
+            return remaining;
+        }
+
+        if (kalamang.isRandom) {
+            uint256 recipientsLeft = maxRecipients - claimedRecipients;
+            uint256 fairControlFactor = (remaining * 2) / recipientsLeft;
+            uint256 range = (kalamang.maxRandom - kalamang.minRandom) *
+                100 +
+                1;
+            uint256 minRandomScaled = kalamang.minRandom * 100;
+            uint256 randomFactor = uint256(
+                keccak256(
+                    abi.encodePacked(block.timestamp, _recipient, _kalamangId)
+                )
+            );
+            uint256 randomValueInRange = (randomFactor % range) +
+                minRandomScaled;
+            uint256 randomAmount = (fairControlFactor * randomValueInRange) /
+                10000;
+            if (randomAmount > remaining) {
+                randomAmount = remaining;
+            }
+            return randomAmount;
+        }
+
+        uint256 claimAmount = kalamang.totalTokens / maxRecipients;
+        if (claimAmount > remaining) {
+            claimAmount = remaining;
+        }
+        return claimAmount;
     }
 
     function abortKalamang(
@@ -208,24 +289,16 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         address _creator
     ) external override ownerOrKalamangController returns (uint256) {
         Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
-        require(
-            kalamang.creator != address(0),
-            "KalamangStorage : Kalamang does not exist"
-        );
-        require(
-            kalamang.creator == _creator,
-            "KalamangStorage : Invalid creator"
-        );
-        require(kalamang.isActive == true, "KalamangStorage : Already aborted");
+        address creator = kalamang.creator;
+        if (creator == address(0)) revert KalamangNotFound();
+        if (creator != _creator) revert InvalidCreator();
+        if (!kalamang.isActive) revert AlreadyAborted();
 
         IKAP20 _token = IKAP20(kalamang.tokenAddress);
 
         uint256 _amount = kalamang.totalTokens - kalamang.claimedTokens;
 
-        require(
-            _token.transfer(kalamang.creator, _amount),
-            "KalamangStorage : Token transfer failed"
-        );
+        if (!_token.transfer(creator, _amount)) revert TokenTransferFailed();
 
         kalamang.isActive = false;
 
@@ -233,26 +306,29 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
     }
 
     function abortAllKalamang() external onlyOwner {
-        for (uint256 i = 0; i < totalKalaMangs; i++) {
+        uint256 _total = totalKalaMangs;
+        for (uint256 i = 0; i < _total; ) {
             Kalamang storage kalamang = kalamangs[i];
 
             if (
-                !kalamang.isActive ||
-                kalamang.maxRecipients == kalamang.claimedRecipients
+                kalamang.isActive &&
+                kalamang.maxRecipients != kalamang.claimedRecipients
             ) {
-                continue;
+                IKAP20 _token = IKAP20(kalamang.tokenAddress);
+
+                uint256 _amount = kalamang.totalTokens -
+                    kalamang.claimedTokens;
+
+                if (!_token.transfer(kalamang.creator, _amount)) {
+                    revert TokenTransferFailed();
+                }
+
+                kalamang.isActive = false;
             }
 
-            IKAP20 _token = IKAP20(kalamang.tokenAddress);
-
-            uint256 _amount = kalamang.totalTokens - kalamang.claimedTokens;
-
-            require(
-                _token.transfer(kalamang.creator, _amount),
-                "KalamangStorage : Token transfer failed"
-            );
-
-            kalamang.isActive = false;
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -261,16 +337,11 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         address _creator
     ) external override ownerOrKalamangController {
         Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
-        require(
-            kalamang.creator != address(0),
-            "KalamangStorage : Kalamang does not exist"
-        );
-        require(
-            kalamang.creator == _creator,
-            "KalamangStorage : Invalid creator"
-        );
-        require(kalamang.isActive, "KalamangStorage : Kalamang is aborted");
-        require(!kalamang.isClaimable, "KalamangStorage : Already unlocked");
+        address creator = kalamang.creator;
+        if (creator == address(0)) revert KalamangNotFound();
+        if (creator != _creator) revert InvalidCreator();
+        if (!kalamang.isActive) revert KalamangAborted();
+        if (kalamang.isClaimable) revert AlreadyUnlocked();
 
         kalamang.isClaimable = true;
     }
@@ -279,10 +350,9 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         string calldata _kalamangId
     ) public view virtual returns (KalamangInfo memory) {
         Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
-        require(
-            kalamang.creator != address(0),
-            "KalamangStorage : Kalamang does not exist"
-        );
+        // NOTE: must keep reverting on an unknown id — the frontend's
+        // getKalamangVersion probe relies on this revert to tell V1 from V2.
+        if (kalamang.creator == address(0)) revert KalamangNotFound();
 
         IKAP20 _token = IKAP20(kalamang.tokenAddress);
 
@@ -325,9 +395,6 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         }
 
         uint256 _start = _totalMyKalamang - ((_page - 1) * _pageLength);
-        if (_start < 0) {
-            _start = _totalMyKalamang - 1;
-        }
 
         uint256 _end = _start > _pageLength ? _start - _pageLength : 0;
         uint256 _resultLength = _start - _end;
@@ -401,20 +468,15 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         return kalamang.creator != address(0) && kalamang.isGasless;
     }
 
-    // V2 (anti-Sybil Layer 3): cheap lookup used by the controller (to gate the
-    // direct claimToken path) and by the frontend/server to decide whether a
-    // kalamang must be claimed with a server-issued voucher.
+    // V2 (anti-Sybil Layer 3): cheap lookup used by the frontend/server to decide
+    // whether a kalamang must be claimed with a server-issued voucher. (The
+    // direct-claim gate itself is now enforced inside claimToken via the
+    // enforceVoucherGate flag, so the controller no longer needs to call this.)
     function isVoucherRequired(
         string calldata _kalamangId
     ) public view virtual returns (bool) {
         Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
         return kalamang.creator != address(0) && kalamang.requireVoucher;
-    }
-
-    function getKalamangClaimedHistory(
-        string calldata _kalamangId
-    ) public view virtual returns (KalamangClaimedHistory[] memory) {
-        return claimedHistory[kalamangIds[_kalamangId]];
     }
 
     function updateWhitelist(
@@ -424,22 +486,28 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         address _creator
     ) external override onlyKalamangController {
         Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
-        require(
-            kalamang.creator == _creator,
-            "KalamangStorage : Invalid creator"
-        );
-        require(kalamang.isActive, "KalamangStorage : Kalamang is not active");
+        if (kalamang.creator != _creator) revert InvalidCreator();
+        if (!kalamang.isActive) revert KalamangNotActive();
 
         kalamang.isRequireWhitelist = _isRequireWhitelist;
 
-        for (uint i = 0; i < kalamang.whitelistArray.length; i++) {
-            kalamang.whitelist[kalamang.whitelistArray[i]] = false;
+        address[] storage _old = kalamang.whitelistArray;
+        uint256 _oldLen = _old.length;
+        for (uint256 i = 0; i < _oldLen; ) {
+            kalamang.whitelist[_old[i]] = false;
+            unchecked {
+                ++i;
+            }
         }
 
         kalamang.whitelistArray = _whitelist;
 
-        for (uint i = 0; i < _whitelist.length; i++) {
+        uint256 _newLen = _whitelist.length;
+        for (uint256 i = 0; i < _newLen; ) {
             kalamang.whitelist[_whitelist[i]] = true;
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -449,19 +517,21 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         address _creator
     ) external override onlyKalamangController {
         Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
-        require(
-            kalamang.creator == _creator,
-            "KalamangStorage : Invalid creator"
-        );
-        require(kalamang.isActive, "KalamangStorage : Kalamang is not active");
+        if (kalamang.creator != _creator) revert InvalidCreator();
+        if (!kalamang.isActive) revert KalamangNotActive();
 
-        for (uint i = 0; i < _whitelist.length; i++) {
-            if (kalamang.whitelist[_whitelist[i]]) {
-                continue;
+        uint256 _len = _whitelist.length;
+        for (uint256 i = 0; i < _len; ) {
+            address _addr = _whitelist[i];
+            // Positive guard (not `continue`) so the unchecked ++i below is
+            // always reached — a `continue` before it would loop forever.
+            if (!kalamang.whitelist[_addr]) {
+                kalamang.whitelist[_addr] = true;
+                kalamang.whitelistArray.push(_addr);
             }
-
-            kalamang.whitelist[_whitelist[i]] = true;
-            kalamang.whitelistArray.push(_whitelist[i]);
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -471,11 +541,8 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         address _creator
     ) external override onlyKalamangController {
         Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
-        require(
-            kalamang.creator == _creator,
-            "KalamangStorage : Invalid creator"
-        );
-        require(kalamang.isActive, "KalamangStorage : Kalamang is not active");
+        if (kalamang.creator != _creator) revert InvalidCreator();
+        if (!kalamang.isActive) revert KalamangNotActive();
 
         for (uint i = 0; i < _whitelist.length; i++) {
             if (!kalamang.whitelist[_whitelist[i]]) {
@@ -503,12 +570,9 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         uint256 _fee
     ) external override onlyOwner {
         Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
-        require(
-            kalamang.creator != address(0),
-            "KalamangStorage : Kalamang does not exist"
-        );
-        require(kalamang.isActive, "KalamangStorage : Kalamang is not active");
-        require(_fee <= 10000, "KalamangStorage : Fee exceeds 100%");
+        if (kalamang.creator == address(0)) revert KalamangNotFound();
+        if (!kalamang.isActive) revert KalamangNotActive();
+        if (_fee > 10000) revert FeeTooHigh();
 
         kalamang.fee = _fee;
 
@@ -524,10 +588,7 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         bool _isGasless
     ) external override onlyOwner {
         Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
-        require(
-            kalamang.creator != address(0),
-            "KalamangStorage : Kalamang does not exist"
-        );
+        if (kalamang.creator == address(0)) revert KalamangNotFound();
 
         kalamang.isGasless = _isGasless;
 
@@ -543,10 +604,7 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         bool _requireVoucher
     ) external override onlyOwner {
         Kalamang storage kalamang = kalamangs[kalamangIds[_kalamangId]];
-        require(
-            kalamang.creator != address(0),
-            "KalamangStorage : Kalamang does not exist"
-        );
+        if (kalamang.creator == address(0)) revert KalamangNotFound();
 
         kalamang.requireVoucher = _requireVoucher;
 

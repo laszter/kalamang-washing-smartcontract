@@ -9,6 +9,21 @@ contract KalamangV2 is EIP712 {
     // Readable version identifier of this contract.
     uint256 public constant VERSION = 2;
 
+    // Custom errors (cheaper than require-strings). One per distinct old message
+    // so the frontend can map each 4-byte selector to a user-facing message.
+    error NotOwner();
+    error NotSdkRouter();
+    error CreatePaused();
+    error ZeroTotalTokens();
+    error ZeroMaxRecipients();
+    error NotTrustedRelayer();
+    error NotGasless();
+    error SignatureExpired();
+    error InvalidSignature();
+    error IssuerNotSet();
+    error VoucherExpired();
+    error InvalidVoucher();
+
     bytes32 private constant CLAIM_TYPEHASH =
         keccak256("Claim(string kalamangId,address recipient,uint256 deadline)");
 
@@ -18,7 +33,9 @@ contract KalamangV2 is EIP712 {
     bytes32 private constant VOUCHER_TYPEHASH =
         keccak256("ClaimVoucher(string kalamangId,address recipient,uint256 deadline)");
 
-    address public owner;
+    // Never reassigned after construction (no setOwner), so immutable — saves an
+    // SLOAD on every onlyOwner call and shrinks the onlyOwner check.
+    address public immutable owner;
     address public sdkCallHelperRouter;
     IKalamangStorageV2 public kalamangStorage;
     bool public isPaused;
@@ -44,26 +61,17 @@ contract KalamangV2 is EIP712 {
     }
 
     modifier onlyOwner() {
-        require(
-            msg.sender == owner,
-            "KalamangV2 : Only owner can call this function"
-        );
+        if (msg.sender != owner) revert NotOwner();
         _;
     }
 
     modifier onlySdkCallHelperRouter() {
-        require(
-            msg.sender == sdkCallHelperRouter,
-            "KalamangV2 : Only sdkCallHelperRouter can call this function"
-        );
+        if (msg.sender != sdkCallHelperRouter) revert NotSdkRouter();
         _;
     }
 
     modifier whenNotPaused() {
-        require(
-            !isPaused,
-            "KalamangV2 : The contract pause create kalamang"
-        );
+        if (isPaused) revert CreatePaused();
         _;
     }
 
@@ -88,11 +96,15 @@ contract KalamangV2 is EIP712 {
         uint256 _length
     ) private view returns (string memory) {
         bytes memory randomString = new bytes(_length);
-        string
+        // Hoisted out of the loop: keep it as `bytes` so we index it directly
+        // (no per-iteration `bytes(charset)` allocation) and read its length
+        // once. The per-index keccak is unchanged, so the id is identical.
+        bytes
             memory charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        uint256 charsetLength = charset.length;
 
-        for (uint256 i = 0; i < _length; i++) {
-            randomString[i] = bytes(charset)[
+        for (uint256 i = 0; i < _length; ) {
+            randomString[i] = charset[
                 uint256(
                     keccak256(
                         abi.encodePacked(
@@ -102,68 +114,14 @@ contract KalamangV2 is EIP712 {
                             i
                         )
                     )
-                ) % bytes(charset).length
+                ) % charsetLength
             ];
+            unchecked {
+                ++i;
+            }
         }
 
         return string(randomString);
-    }
-
-    function getAmountToClaim(
-        string calldata _kalamangId,
-        address _recipient
-    ) private view returns (uint256) {
-        IKalamangStorageV2.KalamangInfo memory kalamangInfo = kalamangStorage
-            .getKalamangInfo(_kalamangId);
-
-        if (!kalamangInfo.isActive) {
-            return 0;
-        }
-
-        uint256 claimAmount;
-
-        if (kalamangInfo.claimedRecipients + 1 == kalamangInfo.maxRecipients) {
-            // Directly assign remaining amounts if it’s the last recipient
-            return kalamangInfo.remainingAmounts;
-        }
-
-        if (kalamangInfo.isRandom) {
-            // Precompute constants and minimize repetitive calculations
-            uint256 recipientsLeft = kalamangInfo.maxRecipients -
-                kalamangInfo.claimedRecipients;
-            uint256 fairControlFactor = (kalamangInfo.remainingAmounts * 2) /
-                recipientsLeft;
-            uint256 range = (kalamangInfo.maxRandom - kalamangInfo.minRandom) *
-                100 +
-                1;
-            uint256 minRandomScaled = kalamangInfo.minRandom * 100;
-
-            uint256 randomFactor = uint256(
-                keccak256(
-                    abi.encodePacked(block.timestamp, _recipient, _kalamangId)
-                )
-            );
-
-            uint256 randomValueInRange = (randomFactor % range) +
-                minRandomScaled;
-            uint256 randomAmount = (fairControlFactor * randomValueInRange) /
-                10000;
-
-            if (randomAmount > kalamangInfo.remainingAmounts) {
-                randomAmount = kalamangInfo.remainingAmounts;
-            }
-
-            claimAmount = randomAmount;
-        } else {
-            // Distribute equal amounts directly
-            claimAmount = kalamangInfo.totalTokens / kalamangInfo.maxRecipients;
-
-            if (claimAmount > kalamangInfo.remainingAmounts) {
-                claimAmount = kalamangInfo.remainingAmounts;
-            }
-        }
-
-        return claimAmount;
     }
 
     function createKalamang(
@@ -178,17 +136,11 @@ contract KalamangV2 is EIP712 {
         address[] calldata _whitelist,
         bool _isClaimable,
         bool _requireVoucher
-    ) external whenNotPaused {
-        require(
-            _totalTokens > 0,
-            "KalamangV2 : Total tokens must be greater than zero"
-        );
-        require(
-            _maxRecipients > 0,
-            "KalamangV2 : Max recipients must be greater than zero"
-        );
+    ) external whenNotPaused returns (string memory kalamangId) {
+        if (_totalTokens == 0) revert ZeroTotalTokens();
+        if (_maxRecipients == 0) revert ZeroMaxRecipients();
 
-        string memory kalamangId = generateRandomString(64);
+        kalamangId = generateRandomString(64);
 
         IKalamangStorageV2.KalamangConfig
             memory kalamangConfig = IKalamangStorageV2.KalamangConfig(
@@ -216,6 +168,11 @@ contract KalamangV2 is EIP712 {
             _totalTokens,
             _maxRecipients
         );
+
+        // V2 (feature): return the id so the caller doesn't have to scrape it
+        // from the KalamangCreated log (on-chain callers get it directly; the
+        // web reads it from the tx receipt's KalamangCreated event).
+        return kalamangId;
     }
 
     function createKalamangBySdk(
@@ -227,41 +184,38 @@ contract KalamangV2 is EIP712 {
         uint256 _maxRandom,
         uint256 _acceptedKYCLevel,
         bool _isRequireWhitelist,
-        bytes memory _whitelist,
+        bytes calldata _whitelist,
         bool _isClaimable,
         address _bitkubNext
-    ) external onlySdkCallHelperRouter whenNotPaused {
-        require(
-            _totalTokens > 0,
-            "KalamangV2 : Total tokens must be greater than zero"
-        );
-        require(
-            _maxRecipients > 0,
-            "KalamangV2 : Max recipients must be greater than zero"
-        );
+    )
+        external
+        onlySdkCallHelperRouter
+        whenNotPaused
+        returns (string memory kalamangId)
+    {
+        if (_totalTokens == 0) revert ZeroTotalTokens();
+        if (_maxRecipients == 0) revert ZeroMaxRecipients();
 
-        string memory kalamangId = generateRandomString(64);
+        kalamangId = generateRandomString(64);
 
-        address[] memory _whitelistArr;
-        (_whitelistArr) = abi.decode(_whitelist, (address[]));
-
-        IKalamangStorageV2.KalamangConfig
-            memory kalamangConfig = IKalamangStorageV2.KalamangConfig(
-                kalamangId,
-                _bitkubNext,
-                _tokenAddress,
-                _totalTokens,
-                _maxRecipients,
-                _isRandom,
-                _minRandom,
-                _maxRandom,
-                _acceptedKYCLevel,
-                _isClaimable,
-                _isRequireWhitelist,
-                _whitelistArr,
-                true, // isSdkCallerHelper
-                true // requireVoucher: SDK / Bitkub Next creates default to requiring a voucher
-            );
+        // Build the config field-by-field (not the positional constructor) to
+        // keep this function under the stack-too-deep limit without viaIR.
+        IKalamangStorageV2.KalamangConfig memory kalamangConfig;
+        kalamangConfig.kalamangId = kalamangId;
+        kalamangConfig.creator = _bitkubNext;
+        kalamangConfig.tokenAddress = _tokenAddress;
+        kalamangConfig.totalTokens = _totalTokens;
+        kalamangConfig.maxRecipients = _maxRecipients;
+        kalamangConfig.isRandom = _isRandom;
+        kalamangConfig.minRandom = _minRandom;
+        kalamangConfig.maxRandom = _maxRandom;
+        kalamangConfig.acceptedKYCLevel = _acceptedKYCLevel;
+        kalamangConfig.isClaimable = _isClaimable;
+        kalamangConfig.isRequireWhitelist = _isRequireWhitelist;
+        kalamangConfig.whitelist = abi.decode(_whitelist, (address[]));
+        kalamangConfig.isSdkCallerHelper = true;
+        // SDK / Bitkub Next creates default to requiring a voucher.
+        kalamangConfig.requireVoucher = true;
 
         kalamangStorage.createKalamang(kalamangConfig);
 
@@ -271,27 +225,25 @@ contract KalamangV2 is EIP712 {
             _totalTokens,
             _maxRecipients
         );
+
+        return kalamangId;
     }
 
-    function claimToken(string calldata _kalamangId) external {
+    function claimToken(
+        string calldata _kalamangId
+    ) external returns (uint256) {
         // V2 (anti-Sybil Layer 3): a kalamang flagged requireVoucher cannot be
-        // claimed by calling the contract directly — the claimer must go through
-        // claimTokenWithVoucher with a server-issued voucher. This is what forces
-        // bot traffic back through the server's off-chain checks.
-        require(
-            !kalamangStorage.isVoucherRequired(_kalamangId),
-            "KalamangV2 : Voucher required"
-        );
-
-        uint256 claimAmount = getAmountToClaim(_kalamangId, msg.sender);
-
+        // claimed directly — the storage layer enforces this when the last
+        // argument is true (only this direct EOA path passes true). The claimer
+        // must instead go through claimTokenWithVoucher with a server voucher.
         uint256 amount = kalamangStorage.claimToken(
             _kalamangId,
-            claimAmount,
-            msg.sender
+            msg.sender,
+            true
         );
 
         emit TokenClaimed(_kalamangId, msg.sender, amount);
+        return amount;
     }
 
     // V2: gasless claim. The recipient signs an EIP-712 Claim message off-chain
@@ -303,23 +255,14 @@ contract KalamangV2 is EIP712 {
         address _recipient,
         uint256 _deadline,
         bytes calldata _signature
-    ) external {
-        require(
-            trustedRelayers[msg.sender],
-            "KalamangV2 : Only trusted relayer can call this function"
-        );
+    ) external returns (uint256) {
+        if (!trustedRelayers[msg.sender]) revert NotTrustedRelayer();
         // V2: gasless claims are only allowed for kalamangs the owner has
         // explicitly flagged as gas-sponsored. This keeps the relayer from
         // paying gas for kalamangs that are not meant to be free-gas, even if
         // an off-chain check is bypassed.
-        require(
-            kalamangStorage.isKalamangGasless(_kalamangId),
-            "KalamangV2 : Kalamang is not gasless"
-        );
-        require(
-            block.timestamp <= _deadline,
-            "KalamangV2 : Signature expired"
-        );
+        if (!kalamangStorage.isKalamangGasless(_kalamangId)) revert NotGasless();
+        if (block.timestamp > _deadline) revert SignatureExpired();
 
         bytes32 digest = _hashTypedDataV4(
             keccak256(
@@ -331,20 +274,19 @@ contract KalamangV2 is EIP712 {
                 )
             )
         );
-        require(
-            ECDSA.recover(digest, _signature) == _recipient,
-            "KalamangV2 : Invalid signature"
-        );
+        if (ECDSA.recover(digest, _signature) != _recipient) {
+            revert InvalidSignature();
+        }
 
-        uint256 claimAmount = getAmountToClaim(_kalamangId, _recipient);
-
+        // enforceVoucherGate = false: the EIP-712 signature is the authorization.
         uint256 amount = kalamangStorage.claimToken(
             _kalamangId,
-            claimAmount,
-            _recipient
+            _recipient,
+            false
         );
 
         emit TokenClaimed(_kalamangId, _recipient, amount);
+        return amount;
     }
 
     // V2 (anti-Sybil Layer 3): direct claim that requires a server-issued
@@ -358,15 +300,9 @@ contract KalamangV2 is EIP712 {
         string calldata _kalamangId,
         uint256 _deadline,
         bytes calldata _voucherSig
-    ) external {
-        require(
-            claimIssuer != address(0),
-            "KalamangV2 : Voucher issuer not set"
-        );
-        require(
-            block.timestamp <= _deadline,
-            "KalamangV2 : Voucher expired"
-        );
+    ) external returns (uint256) {
+        if (claimIssuer == address(0)) revert IssuerNotSet();
+        if (block.timestamp > _deadline) revert VoucherExpired();
 
         bytes32 digest = _hashTypedDataV4(
             keccak256(
@@ -378,35 +314,34 @@ contract KalamangV2 is EIP712 {
                 )
             )
         );
-        require(
-            ECDSA.recover(digest, _voucherSig) == claimIssuer,
-            "KalamangV2 : Invalid voucher"
-        );
+        if (ECDSA.recover(digest, _voucherSig) != claimIssuer) {
+            revert InvalidVoucher();
+        }
 
-        uint256 claimAmount = getAmountToClaim(_kalamangId, msg.sender);
-
+        // enforceVoucherGate = false: the voucher signature already authorized
+        // this claim; the direct-claim gate would double-reject it.
         uint256 amount = kalamangStorage.claimToken(
             _kalamangId,
-            claimAmount,
-            msg.sender
+            msg.sender,
+            false
         );
 
         emit TokenClaimed(_kalamangId, msg.sender, amount);
+        return amount;
     }
 
     function claimTokenBySdk(
         string calldata _kalamangId,
         address _bitkubNext
-    ) external onlySdkCallHelperRouter {
-        uint256 claimAmount = getAmountToClaim(_kalamangId, _bitkubNext);
-
+    ) external onlySdkCallHelperRouter returns (uint256) {
         uint256 amount = kalamangStorage.claimToken(
             _kalamangId,
-            claimAmount,
-            _bitkubNext
+            _bitkubNext,
+            false
         );
 
         emit TokenClaimed(_kalamangId, _bitkubNext, amount);
+        return amount;
     }
 
     function updateWhitelist(
@@ -425,7 +360,7 @@ contract KalamangV2 is EIP712 {
     function updateWhitelistBySdk(
         string calldata _kalamangId,
         bool _isRequireWhitelist,
-        bytes memory _whitelist,
+        bytes calldata _whitelist,
         address _bitkubNext
     ) external onlySdkCallHelperRouter {
         address[] memory _whitelistArr;
@@ -448,7 +383,7 @@ contract KalamangV2 is EIP712 {
 
     function addWhitelistBySdk(
         string calldata _kalamangId,
-        bytes memory _whitelist,
+        bytes calldata _whitelist,
         address _bitkubNext
     ) external onlySdkCallHelperRouter {
         address[] memory _whitelistArr;
@@ -466,7 +401,7 @@ contract KalamangV2 is EIP712 {
 
     function removeWhitelistBySdk(
         string calldata _kalamangId,
-        bytes memory _whitelist,
+        bytes calldata _whitelist,
         address _bitkubNext
     ) external onlySdkCallHelperRouter {
         address[] memory _whitelistArr;
