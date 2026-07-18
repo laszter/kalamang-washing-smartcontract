@@ -1,7 +1,7 @@
 import hardhat from "hardhat";
 
 async function main() {
-  const connection = await hardhat.network.connect();
+  const connection = await hardhat.network.create();
   const { ethers } = connection;
 
   const [deployer] = await ethers.getSigners();

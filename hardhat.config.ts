@@ -4,6 +4,9 @@ import hardhatEthers from "@nomicfoundation/hardhat-ethers";
 
 export default defineConfig({
   plugins: [hardhatEthers],
+  paths: {
+    sources: "./Contracts",
+  },
   solidity: {
     profiles: {
       default: {

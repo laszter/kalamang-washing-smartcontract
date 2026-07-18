@@ -16,7 +16,10 @@
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.0",
-    "@types/node": "^25.3.0",
+    "@types/node": "^26.1.1",
     "hardhat": "^3.0.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.6"
   }
 }
