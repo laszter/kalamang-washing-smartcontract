@@ -15,6 +15,7 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
     // revert path). One error per distinct old message, so the frontend can map
     // each 4-byte selector back to a specific user-facing message.
     error NotOwner();
+    error NotPendingOwner();
     error NotController();
     error NotOwnerOrController();
     error Paused();
@@ -63,6 +64,11 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
     address public owner;
     bool public isPaused;
     bool public isAllowAllTokens;
+    // V2 (safe ownership transfer): the address nominated by setOwner. Ownership
+    // does not move until this address calls acceptOwnership, so a mistyped or
+    // dead address can never lock the contract out of its owner. Read only during
+    // the rare transfer flow, so it is fine to leave it outside the packed slot 0.
+    address public pendingOwner;
     address public kalamangController;
     uint256 public totalKalaMangs;
     IKYCBitkubChain public kycBitkubChain;
@@ -79,6 +85,16 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
     event KalamangFeeUpdated(string kalamangId, uint256 fee);
     event KalamangGaslessUpdated(string kalamangId, bool isGasless);
     event KalamangRequireVoucherUpdated(string kalamangId, bool requireVoucher);
+    // V2 (safe ownership transfer): emitted when setOwner nominates a new owner
+    // and when acceptOwnership finalizes the move.
+    event OwnershipTransferStarted(
+        address indexed previousOwner,
+        address indexed newOwner
+    );
+    event OwnershipTransferred(
+        address indexed previousOwner,
+        address indexed newOwner
+    );
 
     constructor(
         address _kalamangController,
@@ -635,8 +651,24 @@ contract KalamangStorageV2 is IKalamangStorageV2 {
         feeStorage = IKalamangFeeStorage(_feeStorage);
     }
 
+    // V2 (safe ownership transfer): step 1 of 2 — the current owner nominates a
+    // new owner. Ownership does NOT change here; the nominee must call
+    // acceptOwnership to finalize the move. Pass address(0) to cancel a pending
+    // nomination.
     function setOwner(address _owner) external onlyOwner {
-        owner = _owner;
+        pendingOwner = _owner;
+        emit OwnershipTransferStarted(owner, _owner);
+    }
+
+    // V2 (safe ownership transfer): step 2 of 2 — the nominated address claims
+    // ownership. Only a wallet that can actually transact can accept, so
+    // ownership can never be handed to a wrong or unusable address.
+    function acceptOwnership() external {
+        if (msg.sender != pendingOwner) revert NotPendingOwner();
+        address previousOwner = owner;
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        emit OwnershipTransferred(previousOwner, owner);
     }
 
     function setAllowTokenAddress(

@@ -12,6 +12,7 @@ contract KalamangV2 is EIP712 {
     // Custom errors (cheaper than require-strings). One per distinct old message
     // so the frontend can map each 4-byte selector to a user-facing message.
     error NotOwner();
+    error NotPendingOwner();
     error NotSdkRouter();
     error CreatePaused();
     error ZeroTotalTokens();
@@ -33,9 +34,13 @@ contract KalamangV2 is EIP712 {
     bytes32 private constant VOUCHER_TYPEHASH =
         keccak256("ClaimVoucher(string kalamangId,address recipient,uint256 deadline)");
 
-    // Never reassigned after construction (no setOwner), so immutable — saves an
-    // SLOAD on every onlyOwner call and shrinks the onlyOwner check.
-    address public immutable owner;
+    // V2 (safe ownership transfer): a two-step owner change — setOwner nominates,
+    // acceptOwnership confirms — guards against handing ownership to a wrong or
+    // dead address. No longer immutable, so onlyOwner now reads it from storage.
+    address public owner;
+    // Address nominated by setOwner; becomes owner only once it calls
+    // acceptOwnership. address(0) means no transfer is pending.
+    address public pendingOwner;
     address public sdkCallHelperRouter;
     IKalamangStorageV2 public kalamangStorage;
     bool public isPaused;
@@ -90,6 +95,16 @@ contract KalamangV2 is EIP712 {
     event KalamangUnlocked(string kalamangId);
     event TrustedRelayerUpdated(address indexed relayer, bool isTrusted);
     event ClaimIssuerUpdated(address indexed issuer);
+    // V2 (safe ownership transfer): emitted when setOwner nominates a new owner
+    // and when acceptOwnership finalizes the move.
+    event OwnershipTransferStarted(
+        address indexed previousOwner,
+        address indexed newOwner
+    );
+    event OwnershipTransferred(
+        address indexed previousOwner,
+        address indexed newOwner
+    );
 
     // Function to generate a random string
     function generateRandomString(
@@ -472,5 +487,25 @@ contract KalamangV2 is EIP712 {
 
     function setkalamangStorage(address _kalamangStorage) external onlyOwner {
         kalamangStorage = IKalamangStorageV2(_kalamangStorage);
+    }
+
+    // V2 (safe ownership transfer): step 1 of 2 — the current owner nominates a
+    // new owner. Ownership does NOT change here; the nominee must call
+    // acceptOwnership to finalize the move. Pass address(0) to cancel a pending
+    // nomination.
+    function setOwner(address _owner) external onlyOwner {
+        pendingOwner = _owner;
+        emit OwnershipTransferStarted(owner, _owner);
+    }
+
+    // V2 (safe ownership transfer): step 2 of 2 — the nominated address claims
+    // ownership. Only a wallet that can actually transact can accept, so
+    // ownership can never be handed to a wrong or unusable address.
+    function acceptOwnership() external {
+        if (msg.sender != pendingOwner) revert NotPendingOwner();
+        address previousOwner = owner;
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        emit OwnershipTransferred(previousOwner, owner);
     }
 }
